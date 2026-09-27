@@ -23,7 +23,7 @@ export default function DashboardLayout({
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#060d1a]">
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a2e]">
         <SilkWrapper />
         <DotFieldWrapper />
         <div className="relative z-10 flex flex-col items-center gap-4">
@@ -37,7 +37,7 @@ export default function DashboardLayout({
   if (!user) return null;
 
   return (
-    <div className="relative min-h-screen bg-[#060d1a]">
+    <div className="relative min-h-screen bg-[#0a0a2e]">
       <SilkWrapper />
       <DotFieldWrapper />
       <div className="relative z-10">
