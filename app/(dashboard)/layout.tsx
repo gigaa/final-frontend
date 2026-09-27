@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import Navbar from '@/components/Navbar';
 import DotFieldWrapper from '@/components/DotFieldWrapper';
-import SilkWrapper from '@/components/SilkWrapper';
 
 export default function DashboardLayout({
   children,
@@ -24,7 +23,6 @@ export default function DashboardLayout({
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0a0a2e]">
-        <SilkWrapper />
         <DotFieldWrapper />
         <div className="relative z-10 flex flex-col items-center gap-4">
           <div className="w-10 h-10 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
@@ -38,7 +36,6 @@ export default function DashboardLayout({
 
   return (
     <div className="relative min-h-screen bg-[#0a0a2e]">
-      <SilkWrapper />
       <DotFieldWrapper />
       <div className="relative z-10">
         <Navbar />
