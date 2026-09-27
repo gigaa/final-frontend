@@ -9,8 +9,8 @@ export default function DotFieldWrapper() {
     <DotField
       // gradientFrom="rgba(127, 35, 254, 0.35)"
       // gradientTo="rgba(168, 77, 252, 0.25)"
-      gradientFrom="rgba(255, 255, 255,1)"
-      gradientTo="rgba(255, 255, 255,1)"
+      gradientFrom="rgba(255, 255, 255,0.5)"
+      gradientTo="rgba(255, 255, 255,0.5)"
       dotRadius={3}
       dotSpacing={14}
       cursorRadius={500}
@@ -25,7 +25,7 @@ export default function DotFieldWrapper() {
       // bulgeOnly
       // bulgeStrength={67}
       // glowRadius={160}
-      glowColor="rgba(255, 255, 255,1)"
+      glowColor="rgba(255, 255, 255,0.5)"
     />
   );
 }
