@@ -23,7 +23,7 @@ export default function DotFieldWrapper() {
       // bulgeOnly
       // bulgeStrength={67}
       // glowRadius={160}
-      glowColor="rgba(255, 255, 255, 0.2)"
+      glowColor="rgba(255, 255, 255, 0.1)"
     />
   );
 }
