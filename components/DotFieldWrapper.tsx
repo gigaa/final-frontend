@@ -12,7 +12,6 @@ export default function DotFieldWrapper() {
       dotRadius={4}
       dotSpacing={14}
       bulgeOnly
-      waveAmplitude={20}
       bulgeStrength={67}
       glowRadius={160}
       glowColor="#120F17"
