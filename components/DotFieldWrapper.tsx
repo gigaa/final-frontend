@@ -10,7 +10,7 @@ export default function DotFieldWrapper() {
       gradientFrom="rgba(127, 35, 254, 0.35)"
       gradientTo="rgba(168, 77, 252, 0.25)"
       dotRadius={4}
-      dotSpacing={14}
+      dotSpacing={10}
       bulgeOnly
       bulgeStrength={67}
       glowRadius={160}
