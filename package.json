@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@react-three/fiber": "^9.8.1",
     "@types/three": "^0.186.0",
     "animated-backgrounds": "^2.0.0",
     "axios": "^1.20.0",
