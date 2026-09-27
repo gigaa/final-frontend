@@ -9,7 +9,7 @@ export default function DotFieldWrapper() {
     <DotField
       gradientFrom="rgba(127, 35, 254, 0.35)"
       gradientTo="rgba(168, 77, 252, 0.25)"
-      dotRadius={2}
+      dotRadius={5}
       dotSpacing={14}
       bulgeOnly
       bulgeStrength={67}
