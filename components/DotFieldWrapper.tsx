@@ -7,11 +7,9 @@ const DotField = dynamic(() => import('./DotField'), { ssr: false });
 export default function DotFieldWrapper() {
   return (
     <DotField
-      // gradientFrom="rgba(127, 35, 254, 0.35)"
-      // gradientTo="rgba(168, 77, 252, 0.25)"
-        gradientFrom="#969696"
-      gradientTo="#969696"
-      dotRadius={4}
+      gradientFrom="rgba(127, 35, 254, 0.35)"
+      gradientTo="rgba(168, 77, 252, 0.25)"
+      dotRadius={3}
       dotSpacing={10}
       bulgeOnly
       bulgeStrength={67}
