@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@types/three": "^0.186.0",
+    "animated-backgrounds": "^2.0.0",
     "axios": "^1.20.0",
     "clsx": "^2.1.1",
     "cropperjs": "^2.2.0",
