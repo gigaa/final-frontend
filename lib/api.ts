@@ -7,7 +7,7 @@ import {
 } from "@/types";
 
 const api = axios.create({
-  baseURL: "/api",
+  baseURL: `${process.env.NEXT_API_URL ?? "http://localhost:3000"}/api`,
   headers: { "Content-Type": "application/json" },
 });
 
@@ -49,7 +49,9 @@ export const imagesApi = {
       .post<{
         message: string;
         image: ImageRecord & { url: string };
-      }>("/images/upload", form, { headers: { "Content-Type": "multipart/form-data" } })
+      }>("/images/upload", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      })
       .then((r) => r.data);
   },
 
