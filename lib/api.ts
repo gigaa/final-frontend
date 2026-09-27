@@ -6,8 +6,10 @@ import {
   TransformPayload,
 } from "@/types";
 
+// Always use relative /api — Next.js rewrites proxy to the backend.
+// This works both locally and on Vercel (rewrite is server-side).
 const api = axios.create({
-  baseURL: `${process.env.NEXT_API_URL}/api`,
+  baseURL: "/api",
   headers: { "Content-Type": "application/json" },
 });
 
@@ -49,9 +51,7 @@ export const imagesApi = {
       .post<{
         message: string;
         image: ImageRecord & { url: string };
-      }>("/images/upload", form, {
-        headers: { "Content-Type": "multipart/form-data" },
-      })
+      }>("/images/upload", form, { headers: { "Content-Type": "multipart/form-data" } })
       .then((r) => r.data);
   },
 
@@ -74,9 +74,8 @@ export const imagesApi = {
   delete: (id: string) => api.delete(`/images/${id}`),
 
   /**
-   * Download a single image through the backend (JWT-auth, no CORS).
-   * originalName is passed explicitly — Next.js proxy may strip
-   * Content-Disposition headers from binary responses.
+   * Download through the backend (JWT-auth, avoids S3 CORS).
+   * Uses relative /api path so Next.js rewrite handles routing.
    */
   downloadBlob: async (
     id: string,
@@ -92,7 +91,6 @@ export const imagesApi = {
     });
     if (!res.ok) throw new Error(`Download failed: ${res.status}`);
 
-    // Try header first; fall back to the explicitly passed name
     const disposition = res.headers.get("Content-Disposition") ?? "";
     const match = disposition.match(/filename\*?=(?:UTF-8''|"?)([^";\r\n]+)/i);
     const filename = match
