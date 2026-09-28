@@ -39,7 +39,7 @@ export default function LoginPage() {
           <Wand2 size={26} className="text-white" />
         </div>
         <h1 className="text-2xl font-bold text-white">Welcome back</h1>
-        <p className="text-gray-400 text-sm mt-1">Sign in to PixelForge</p>
+        <p className="text-gray-300 text-sm mt-1">Sign in to PixelForge</p>
       </div>
 
       {/* Card */}
@@ -75,7 +75,7 @@ export default function LoginPage() {
         </Button>
       </form>
 
-      <p className="text-center text-sm text-gray-500 mt-6">
+      <p className="text-center text-sm text-gray-300 mt-6">
         Don't have an account?{' '}
         <Link
           href="/register"

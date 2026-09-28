@@ -43,7 +43,7 @@ export default function RegisterPage() {
           <Wand2 size={26} className="text-white" />
         </div>
         <h1 className="text-2xl font-bold text-white">Create account</h1>
-        <p className="text-gray-400 text-sm mt-1">Join PixelForge today</p>
+        <p className="text-gray-300 text-sm mt-1">Join PixelForge today</p>
       </div>
 
       <form
@@ -86,7 +86,7 @@ export default function RegisterPage() {
         </Button>
       </form>
 
-      <p className="text-center text-sm text-gray-500 mt-6">
+      <p className="text-center text-sm text-gray-300 mt-6">
         Already have an account?{' '}
         <Link
           href="/login"
