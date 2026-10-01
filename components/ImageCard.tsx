@@ -104,7 +104,7 @@ export default function ImageCard({
             alt={image.originalName}
             className={clsx(
               'w-full h-full object-cover transition-all duration-500',
-              !selectable && 'group-hover:scale-105',
+              !selectable && 'group-hover:scale-105 [@media(hover:none)]:scale-100',
               selected && 'brightness-75',
             )}
             onError={() => setImgError(true)}
@@ -118,8 +118,8 @@ export default function ImageCard({
         {/* Overlay actions — hidden in select mode */}
         {!selectable && (
           <>
-            <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            <div className="absolute bottom-0 left-0 right-0 p-3 flex gap-2 translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
+            <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-transparent opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity duration-300" />
+            <div className="absolute bottom-0 left-0 right-0 p-3 flex gap-2 translate-y-2 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 [@media(hover:none)]:translate-y-0 [@media(hover:none)]:opacity-100 transition-all duration-300">
               <Link
                 href={`/transform/${image._id}`}
                 className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors"
