@@ -9,6 +9,16 @@ export interface AuthResponse {
   access_token: string;
 }
 
+export interface RegisterResponse {
+  message: string;
+}
+
+export interface VerifyEmailResponse {
+  message: string;
+  user: User;
+  access_token: string;
+}
+
 export interface ImageRecord {
   _id: string;
   userId: string;

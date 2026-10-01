@@ -25,7 +25,7 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await register(email, password, name);
-      toast.success('Account created!');
+      // AuthContext.register() redirects to /check-email on success
     } catch (err: unknown) {
       const message = axios.isAxiosError(err)
         ? err.response?.data?.message ?? 'Registration failed'

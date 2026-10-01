@@ -1,6 +1,8 @@
 import axios from "axios";
 import {
   AuthResponse,
+  RegisterResponse,
+  VerifyEmailResponse,
   PaginatedImages,
   ImageRecord,
   TransformPayload,
@@ -36,7 +38,12 @@ api.interceptors.response.use(
 // ── Auth ──────────────────────────────────────────────────
 export const authApi = {
   register: (data: { email: string; password: string; name?: string }) =>
-    api.post<AuthResponse>("/auth/register", data).then((r) => r.data),
+    api.post<RegisterResponse>("/auth/register", data).then((r) => r.data),
+
+  verifyEmail: (token: string) =>
+    api
+      .get<VerifyEmailResponse>("/auth/verify-email", { params: { token } })
+      .then((r) => r.data),
 
   login: (data: { email: string; password: string }) =>
     api.post<AuthResponse>("/auth/login", data).then((r) => r.data),
@@ -51,7 +58,9 @@ export const imagesApi = {
       .post<{
         message: string;
         image: ImageRecord & { url: string };
-      }>("/images/upload", form, { headers: { "Content-Type": "multipart/form-data" } })
+      }>("/images/upload", form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      })
       .then((r) => r.data);
   },
 

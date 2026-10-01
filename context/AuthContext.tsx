@@ -16,6 +16,7 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name?: string) => Promise<void>;
+  verifyEmail: (token: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -51,8 +52,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push('/gallery');
   };
 
+  // register no longer returns a JWT — server just sends a verification email
   const register = async (email: string, password: string, name?: string) => {
-    const res = await authApi.register({ email, password, name });
+    await authApi.register({ email, password, name });
+    // Redirect to the "check your email" holding page
+    router.push('/check-email');
+  };
+
+  // Called from the /verify-email page after the user clicks the link
+  const verifyEmail = async (token: string) => {
+    const res = await authApi.verifyEmail(token);
     persist(res.user, res.access_token);
     router.push('/gallery');
   };
@@ -65,7 +74,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, register, verifyEmail, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );
