@@ -10,6 +10,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { User } from '@/types';
 import { authApi } from '@/lib/api';
+import axios from 'axios';
 
 interface AuthContextType {
   user: User | null;
@@ -47,19 +48,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (email: string, password: string) => {
-    const res = await authApi.login({ email, password });
-    persist(res.user, res.access_token);
-    router.push('/gallery');
+    try {
+      const res = await authApi.login({ email, password });
+      persist(res.user, res.access_token);
+      router.push('/gallery');
+    } catch (err) {
+      // 403 = email not verified — redirect to pending-verification with email
+      if (
+        axios.isAxiosError(err) &&
+        err.response?.status === 403 &&
+        err.response.data?.code === 'EMAIL_NOT_VERIFIED'
+      ) {
+        const unverifiedEmail: string =
+          err.response.data.email ?? email;
+        router.push(
+          `/pending-verification?email=${encodeURIComponent(unverifiedEmail)}`,
+        );
+        return;
+      }
+      throw err; // re-throw so login page can show its own error toast
+    }
   };
 
-  // register no longer returns a JWT — server just sends a verification email
   const register = async (email: string, password: string, name?: string) => {
     await authApi.register({ email, password, name });
-    // Redirect to the "check your email" holding page
     router.push('/check-email');
   };
 
-  // Called from the /verify-email page after the user clicks the link
   const verifyEmail = async (token: string) => {
     const res = await authApi.verifyEmail(token);
     persist(res.user, res.access_token);
