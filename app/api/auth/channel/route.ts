@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Build Apinator auth signature: HMAC-SHA256(secret, "{socket_id}:{channel_name}")
-  const appKey = process.env.NEXT_PUBLIC_APINATOR_KEY!;
+  const appKey = process.env.APINATOR_KEY!;
   const secret = process.env.APINATOR_SECRET!;
   const stringToSign = `${socket_id}:${channel_name}`;
   const signature = await hmacSha256(secret, stringToSign);

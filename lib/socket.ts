@@ -24,9 +24,8 @@ export function getApinator(): Apinator {
     });
 
     client = new Apinator({
-      appKey: process.env.NEXT_PUBLIC_APINATOR_KEY!,
-      cluster:
-        (process.env.NEXT_PUBLIC_APINATOR_CLUSTER as "eu" | "us") ?? "eu",
+      appKey: process.env.APINATOR_KEY!,
+      cluster: (process.env.APINATOR_CLUSTER as "eu" | "us") ?? "eu",
       authEndpoint: "/api/auth/channel",
       authHeaders: lazyHeaders,
     });
