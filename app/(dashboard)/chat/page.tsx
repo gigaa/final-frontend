@@ -398,16 +398,28 @@ function ChatPage() {
               </div>
             )}
             {(() => {
-              const imageMessages = messages
-                .filter((m) => m.type === 'image' && m.imageUrl)
-                .map((m) => ({ src: m.imageUrl!, name: m.imageOriginalName ?? 'image', messageId: m._id }));
+              // Collect all viewable images: both uploaded images and inline image URLs from text messages
+              const allImages: Array<{ src: string; name: string; messageId: string }> = [];
+              for (const m of messages) {
+                if (m.type === 'image' && m.imageUrl) {
+                  allImages.push({ src: m.imageUrl, name: m.imageOriginalName ?? 'image', messageId: m._id });
+                } else if (m.type === 'text' && m.content) {
+                  URL_REGEX.lastIndex = 0;
+                  let match: RegExpExecArray | null;
+                  while ((match = URL_REGEX.exec(m.content)) !== null) {
+                    if (isImageUrl(match[0])) {
+                      allImages.push({ src: match[0], name: 'image', messageId: m._id });
+                    }
+                  }
+                }
+              }
               return messages.map((msg, idx) => (
                 <MessageBubble
                   key={msg._id ?? idx}
                   msg={msg}
                   isMine={msg.sender === user?.id}
-                  allImages={imageMessages}
-                  imageIndex={imageMessages.findIndex((im) => im.messageId === msg._id)}
+                  allImages={allImages}
+                  imageIndex={allImages.findIndex((im) => im.messageId === msg._id)}
                   onDelete={handleDeleteMessage}
                   onEdit={handleEditMessage}
                 />
@@ -644,12 +656,11 @@ function MessageBubble({
   onDelete: (id: string) => void;
   onEdit: (id: string, content: string) => void;
 }) {
-  const [lightbox, setLightbox] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(msg.content);
   const [deleting, setDeleting] = useState(false);
-  const [linkedImageUrl, setLinkedImageUrl] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const editRef = useRef<HTMLTextAreaElement>(null);
 
@@ -736,7 +747,7 @@ function MessageBubble({
         )}>
           {msg.type === 'image' && msg.imageUrl ? (
             <div className="space-y-1">
-              <button onClick={() => setLightbox(true)} className="block focus:outline-none">
+              <button onClick={() => setLightboxIndex(imageIndex)} className="block focus:outline-none">
                 <div className="relative w-48 h-48 rounded-lg overflow-hidden">
                   <Image src={msg.imageUrl} alt={msg.imageOriginalName ?? 'image'} fill className="object-cover hover:opacity-90 transition-opacity" />
                 </div>
@@ -766,7 +777,10 @@ function MessageBubble({
               <MessageText
                 content={msg.content}
                 isMine={isMine}
-                onImageClick={(url) => setLinkedImageUrl(url)}
+                onImageClick={(url) => {
+                  const idx = allImages.findIndex((im) => im.src === url);
+                  setLightboxIndex(idx !== -1 ? idx : imageIndex);
+                }}
               />
             </p>
           )}
@@ -781,15 +795,8 @@ function MessageBubble({
           </div>
         </div>
       </div>
-      {lightbox && msg.imageUrl && (
-        <ImageLightbox images={allImages} initialIndex={imageIndex} onClose={() => setLightbox(false)} />
-      )}
-      {linkedImageUrl && (
-        <ImageLightbox
-          images={[{ src: linkedImageUrl, name: 'image' }]}
-          initialIndex={0}
-          onClose={() => setLinkedImageUrl(null)}
-        />
+      {lightboxIndex !== null && (
+        <ImageLightbox images={allImages} initialIndex={lightboxIndex} onClose={() => setLightboxIndex(null)} />
       )}
     </>
   );
