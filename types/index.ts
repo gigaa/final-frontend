@@ -60,3 +60,60 @@ export interface TransformPayload {
   filter?: ImageFilter;
   watermark?: string;
 }
+
+// ── Friends ───────────────────────────────────────────────
+
+export type FriendshipStatus = "pending" | "accepted" | "rejected";
+
+export interface FriendUser {
+  _id: string;
+  name?: string;
+  email: string;
+}
+
+export interface Friendship {
+  _id: string;
+  requester: FriendUser | string;
+  recipient: FriendUser | string;
+  status: FriendshipStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FriendListItem {
+  friendshipId: string;
+  friend: FriendUser;
+}
+
+export interface UserSearchResult {
+  _id: string;
+  name?: string;
+  email: string;
+  friendshipStatus: FriendshipStatus | null;
+  friendshipId: string | null;
+  iAmRequester: boolean;
+}
+
+// ── Chat ──────────────────────────────────────────────────
+
+export type MessageType = "text" | "image";
+
+export interface ChatMessage {
+  _id: string;
+  sender: string;
+  recipient: string;
+  type: MessageType;
+  content: string;
+  imageUrl?: string;
+  imageOriginalName?: string;
+  imageKey?: string;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface PaginatedMessages {
+  messages: ChatMessage[];
+  total: number;
+  page: number;
+  pages: number;
+}

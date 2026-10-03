@@ -117,3 +117,61 @@ export const imagesApi = {
 };
 
 export default api;
+
+// ── Friends ───────────────────────────────────────────────
+export const friendsApi = {
+  search: (q: string) =>
+    api
+      .get<
+        import("@/types").UserSearchResult[]
+      >("/friends/search", { params: { q } })
+      .then((r) => r.data),
+
+  list: () =>
+    api.get<import("@/types").FriendListItem[]>("/friends").then((r) => r.data),
+
+  pendingReceived: () =>
+    api
+      .get<import("@/types").Friendship[]>("/friends/requests/received")
+      .then((r) => r.data),
+
+  pendingSent: () =>
+    api
+      .get<import("@/types").Friendship[]>("/friends/requests/sent")
+      .then((r) => r.data),
+
+  sendRequest: (recipientId: string) =>
+    api.post("/friends/request", { recipientId }).then((r) => r.data),
+
+  respond: (friendshipId: string, status: "accepted" | "rejected") =>
+    api
+      .patch(`/friends/request/${friendshipId}`, { status })
+      .then((r) => r.data),
+
+  remove: (friendshipId: string) => api.delete(`/friends/${friendshipId}`),
+};
+
+// ── Chat ──────────────────────────────────────────────────
+export const chatApi = {
+  getHistory: (friendId: string, page = 1, limit = 30) =>
+    api
+      .get<import("@/types").PaginatedMessages>(`/chat/${friendId}/messages`, {
+        params: { page, limit },
+      })
+      .then((r) => r.data),
+
+  uploadImage: (friendId: string, file: File) => {
+    const form = new FormData();
+    form.append("image", file);
+    return api
+      .post<
+        import("@/types").ChatMessage & { imageUrl: string }
+      >(`/chat/${friendId}/images`, form, { headers: { "Content-Type": "multipart/form-data" } })
+      .then((r) => r.data);
+  },
+
+  markRead: (friendId: string) => api.post(`/chat/${friendId}/read`),
+
+  getUnreadCounts: () =>
+    api.get<Record<string, number>>("/chat/unread").then((r) => r.data),
+};
