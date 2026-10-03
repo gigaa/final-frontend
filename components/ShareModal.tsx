@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { X, Search, Copy, Check, Loader2, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
-import { friendsApi, chatApi } from '@/lib/api';
+import { friendsApi, chatApi, imagesApi } from '@/lib/api';
 import { getSocket } from '@/lib/socket';
 import type { FriendListItem, ImageRecord } from '@/types';
 
@@ -83,9 +83,8 @@ export default function ShareModal({ image, onClose }: Props) {
     setSending((prev) => new Set(prev).add(friendId));
     try {
       // Upload the image to the chat (re-fetch blob then upload as chat image)
-      const response = await fetch(image.url ?? '');
-      if (!response.ok) throw new Error('Failed to fetch image');
-      const blob = await response.blob();
+      // Download through backend proxy (avoids S3 CORS)
+      const { blob } = await imagesApi.downloadBlob(image._id, image.originalName);
       const file = new File([blob], image.originalName, { type: image.mimetype });
 
       const msg = await chatApi.uploadImage(friendId, file);
