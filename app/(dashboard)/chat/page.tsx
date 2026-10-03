@@ -28,6 +28,7 @@ import { useAuth } from '@/context/AuthContext';
 import { friendsApi, chatApi } from '@/lib/api';
 import { connectSocket, disconnectSocket, getSocket } from '@/lib/socket';
 import { useNotificationSound } from '@/lib/useNotificationSound';
+import { useChatNotification } from '@/lib/useChatNotification';
 import type { FriendListItem, ChatMessage } from '@/types';
 
 // ── Main export wraps in Suspense (required for useSearchParams in Next 16) ──
@@ -44,8 +45,17 @@ function ChatPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const playNotificationSound = useNotificationSound();
+  const { showNotification, requestPermission } = useChatNotification();
+
+  // Ask for notification permission after first interaction
+  useEffect(() => {
+    const ask = () => { requestPermission(); };
+    document.addEventListener('click', ask, { once: true });
+    return () => document.removeEventListener('click', ask);
+  }, [requestPermission]);
 
   const [friends, setFriends] = useState<FriendListItem[]>([]);
+  const friendsRef = useRef<FriendListItem[]>([]);
   const [activeFriendId, setActiveFriendId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
@@ -84,7 +94,7 @@ function ChatPage() {
   useEffect(() => {
     friendsApi
       .list()
-      .then(setFriends)
+      .then((f) => { setFriends(f); friendsRef.current = f; })
       .catch(() => toast.error('Failed to load friends'));
 
     chatApi
@@ -129,12 +139,25 @@ function ChatPage() {
         chatApi.markRead(currentFriendId!).catch(() => {});
         socket.emit('message:read', { friendId: currentFriendId });
       } else if (msg.sender !== user.id) {
-        // Incoming message from another conversation — badge + sound
+        // Incoming message from another conversation — badge + sound + notification
         setUnreadCounts((prev) => ({
           ...prev,
           [msg.sender]: (prev[msg.sender] ?? 0) + 1,
         }));
         playNotificationSound();
+
+        // Browser notification
+        const sender = friendsRef.current.find(
+          (f) => f.friend._id === msg.sender,
+        );
+        const senderName = sender?.friend.name ?? sender?.friend.email ?? 'Someone';
+        const body = msg.type === 'image' ? '📷 Sent you an image' : msg.content;
+        showNotification(
+          senderName,
+          body,
+          msg.sender,
+          `/chat?with=${msg.sender}`,
+        );
       }
 
       // Play sound for incoming messages in active conversation too
@@ -187,7 +210,7 @@ function ChatPage() {
       disconnectSocket();
       socketReady.current = false;
     };
-  }, [user, playNotificationSound]);
+  }, [user, playNotificationSound, showNotification]);
 
   // ── Load conversation history ─────────────────────────
   const loadHistory = useCallback(
