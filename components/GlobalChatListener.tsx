@@ -8,6 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import { connectSocket } from '@/lib/socket';
 import { useNotificationSound } from '@/lib/useNotificationSound';
 import { friendsApi } from '@/lib/api';
+import { avatarGradient } from '@/lib/avatarColor';
 import type { FriendListItem, ChatMessage } from '@/types';
 
 export default function GlobalChatListener() {
@@ -63,7 +64,7 @@ export default function GlobalChatListener() {
           }}
           style={{ cursor: 'pointer' }}
         >
-          <div className="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold">
+          <div className={`flex-shrink-0 w-9 h-9 rounded-full ${avatarGradient(sender?.friend.email ?? senderName)} flex items-center justify-center text-white text-sm font-bold`}>
             {senderName[0].toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">

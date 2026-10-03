@@ -28,6 +28,7 @@ import {
 import clsx from 'clsx';
 import { useAuth } from '@/context/AuthContext';
 import { friendsApi, chatApi } from '@/lib/api';
+import { avatarGradient } from '@/lib/avatarColor';
 import { connectSocket } from '@/lib/socket';
 import type { FriendListItem, ChatMessage } from '@/types';
 
@@ -325,7 +326,7 @@ function ChatPage() {
                     isActive && 'bg-violet-600/20 border-r-2 border-violet-500',
                   )}
                 >
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                  <div className={`w-9 h-9 rounded-full ${avatarGradient(friend.email)} flex items-center justify-center text-white text-sm font-bold flex-shrink-0`}>
                     {(friend.name ?? friend.email)[0].toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -359,7 +360,7 @@ function ChatPage() {
             <button onClick={() => setActiveFriendId(null)} className="sm:hidden text-gray-400 hover:text-white">
               <ChevronLeft size={20} />
             </button>
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold">
+            <div className={`w-9 h-9 rounded-full ${avatarGradient(activeFriend?.friend.email ?? '')} flex items-center justify-center text-white text-sm font-bold`}>
               {(activeFriend?.friend.name ?? activeFriend?.friend.email ?? '?')[0].toUpperCase()}
             </div>
             <div className="flex-1">

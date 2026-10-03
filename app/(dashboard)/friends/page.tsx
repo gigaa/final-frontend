@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import { friendsApi } from '@/lib/api';
+import { avatarGradient } from '@/lib/avatarColor';
 import Button from '@/components/ui/Button';
 import type {
   UserSearchResult,
@@ -208,7 +209,7 @@ export default function FriendsPage() {
                 className="flex items-center justify-between p-4 rounded-xl bg-gray-900/60 border border-gray-800 hover:border-gray-700 transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <Avatar name={friend.name ?? friend.email} />
+                  <Avatar name={friend.name ?? friend.email} email={friend.email} />
                   <div>
                     <p className="text-white font-medium text-sm">
                       {friend.name ?? friend.email}
@@ -266,7 +267,7 @@ export default function FriendsPage() {
                       className="flex items-center justify-between p-4 rounded-xl bg-gray-900/60 border border-gray-800"
                     >
                       <div className="flex items-center gap-3">
-                        <Avatar name={sender.name ?? sender.email} />
+                        <Avatar name={sender.name ?? sender.email} email={sender.email} />
                         <div>
                           <p className="text-white font-medium text-sm">
                             {sender.name ?? sender.email}
@@ -317,7 +318,7 @@ export default function FriendsPage() {
                       className="flex items-center justify-between p-4 rounded-xl bg-gray-900/60 border border-gray-800"
                     >
                       <div className="flex items-center gap-3">
-                        <Avatar name={recipient.name ?? recipient.email} />
+                        <Avatar name={recipient.name ?? recipient.email} email={recipient.email} />
                         <div>
                           <p className="text-white font-medium text-sm">
                             {recipient.name ?? recipient.email}
@@ -379,7 +380,7 @@ export default function FriendsPage() {
                   className="flex items-center justify-between p-4 rounded-xl bg-gray-900/60 border border-gray-800 hover:border-gray-700 transition-colors"
                 >
                   <div className="flex items-center gap-3">
-                    <Avatar name={u.name ?? u.email} />
+                    <Avatar name={u.name ?? u.email} email={u.email} />
                     <div>
                       <p className="text-white font-medium text-sm">
                         {u.name ?? u.email}
@@ -405,9 +406,9 @@ export default function FriendsPage() {
 
 // ── Sub-components ────────────────────────────────────────
 
-function Avatar({ name }: { name: string }) {
+function Avatar({ name, email }: { name: string; email?: string }) {
   return (
-    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+    <div className={`w-9 h-9 rounded-full ${avatarGradient(email ?? name)} flex items-center justify-center text-white text-sm font-bold flex-shrink-0`}>
       {name[0].toUpperCase()}
     </div>
   );

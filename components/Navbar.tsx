@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { chatApi } from '@/lib/api';
+import { avatarGradient } from '@/lib/avatarColor';
 import {
   ImageIcon,
   Upload,
@@ -102,7 +103,7 @@ export default function Navbar() {
         {user && (
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold">
+              <div className={`w-8 h-8 rounded-full ${avatarGradient(user.email)} flex items-center justify-center text-white text-sm font-bold`}>
                 {(user.name ?? user.email)[0].toUpperCase()}
               </div>
               <span className="text-sm text-gray-300 hidden sm:block">

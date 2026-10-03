@@ -7,6 +7,7 @@ import { X, Search, Copy, Check, Loader2, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 import clsx from 'clsx';
 import { friendsApi, chatApi, imagesApi } from '@/lib/api';
+import { avatarGradient } from '@/lib/avatarColor';
 import { getSocket } from '@/lib/socket';
 import type { FriendListItem, ImageRecord } from '@/types';
 
@@ -194,7 +195,7 @@ export default function ShareModal({ image, onClose }: Props) {
                           'w-14 h-14 rounded-full flex items-center justify-center text-white text-lg font-bold transition-all duration-200',
                           isSent
                             ? 'bg-green-600/80 ring-2 ring-green-500'
-                            : 'bg-gradient-to-br from-violet-500 to-pink-500 group-hover:ring-2 ring-violet-400 group-hover:scale-105',
+                            : `${avatarGradient(friend.email)} group-hover:ring-2 ring-violet-400 group-hover:scale-105`,
                           isSending && 'opacity-60',
                         )}
                       >
