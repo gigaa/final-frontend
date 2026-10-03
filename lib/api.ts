@@ -160,6 +160,13 @@ export const chatApi = {
       })
       .then((r) => r.data),
 
+  saveTextMessageRest: (friendId: string, content: string) =>
+    api
+      .post<
+        import("@/types").ChatMessage
+      >(`/chat/${friendId}/messages`, { content })
+      .then((r) => r.data),
+
   uploadImage: (friendId: string, file: File) => {
     const form = new FormData();
     form.append("image", file);

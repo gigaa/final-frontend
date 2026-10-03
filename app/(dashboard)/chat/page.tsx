@@ -110,14 +110,14 @@ function ChatPage() {
 
     socket.on('message:receive', (msg: ChatMessage) => {
       const currentFriendId = activeFriendIdRef.current;
+      // This message belongs to the active conversation if either party is our friend
       const isActiveConversation =
         currentFriendId !== null &&
-        (msg.sender === currentFriendId || msg.recipient === currentFriendId);
+        ((msg.sender === currentFriendId && msg.recipient === user.id) ||
+          (msg.recipient === currentFriendId && msg.sender === user.id));
 
       setMessages((prev) => {
-        // Only add to visible messages if this belongs to the active conversation
         if (!isActiveConversation) return prev;
-        // Deduplicate by _id
         if (prev.some((m) => m._id === msg._id)) return prev;
         return [...prev, msg];
       });
@@ -223,13 +223,23 @@ function ChatPage() {
     if (!text.trim() || !activeFriendId || sending) return;
     const content = text.trim();
     setText('');
-
     setSending(true);
+
     try {
-      getSocket().emit('message:send', {
-        recipientId: activeFriendId,
-        content,
-      });
+      const socket = getSocket();
+
+      if (!socket.connected) {
+        // Socket disconnected — fall back to REST to save the message,
+        // then add it locally (no real-time echo will come)
+        const msg = await chatApi.saveTextMessageRest(activeFriendId, content);
+        setMessages((prev) =>
+          prev.some((m) => m._id === (msg as any)._id)
+            ? prev
+            : [...prev, msg as any],
+        );
+      } else {
+        socket.emit('message:send', { recipientId: activeFriendId, content });
+      }
     } catch {
       toast.error('Failed to send message');
       setText(content);
