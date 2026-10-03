@@ -326,7 +326,7 @@ function ChatPage() {
                     isActive && 'bg-violet-600/20 border-r-2 border-violet-500',
                   )}
                 >
-                  <div className={`w-9 h-9 rounded-full ${avatarGradient(friend.email)} flex items-center justify-center text-white text-sm font-bold flex-shrink-0`}>
+                  <div  style={avatarGradient(friend.email)} className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0`}>
                     {(friend.name ?? friend.email)[0].toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
