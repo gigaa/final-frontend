@@ -79,7 +79,7 @@ export default function GlobalChatListener() {
           toastId: `chat-${data.sender}`,
           updateId: `chat-${data.sender}`,
           position: 'bottom-right',
-          // autoClose: 5000,
+          autoClose: 10000,
           closeOnClick: false,
           style: {
             background: '#111827',
