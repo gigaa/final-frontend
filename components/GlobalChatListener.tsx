@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'react-toastify';
 import { MessageCircle, ImageIcon } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { connectApinator, userChannelName } from '@/lib/socket';
+import { connectSocket } from '@/lib/socket';
 import { useNotificationSound } from '@/lib/useNotificationSound';
 import { friendsApi } from '@/lib/api';
 import type { FriendListItem, ChatMessage } from '@/types';
@@ -25,16 +25,13 @@ export default function GlobalChatListener() {
     friendsApi.list().then((f) => { friendsRef.current = f; }).catch(() => {});
   }, [user]);
 
-  // Subscribe to private-user-{userId} channel for incoming messages
+  // Connect socket and listen for incoming messages globally
   useEffect(() => {
     if (!user?.id) return;
 
-    const apinator = connectApinator();
-    const channelName = userChannelName(user.id);
-    const channel = apinator.subscribe(channelName);
+    const socket = connectSocket();
 
-    const handleMessage = (raw: unknown) => {
-      const data = raw as ChatMessage;
+    const handleMessage = (data: ChatMessage) => {
       const myId = userIdRef.current;
       // Ignore echo of own messages
       if (data.sender === myId) return;
@@ -95,12 +92,10 @@ export default function GlobalChatListener() {
       );
     };
 
-    // message:receive carries both text and image messages
-    channel.bind('message:receive', handleMessage);
+    socket.on('message:receive', handleMessage);
 
     return () => {
-      channel.unbind('message:receive', handleMessage);
-      apinator.unsubscribe(channelName);
+      socket.off('message:receive', handleMessage);
     };
   }, [user?.id, playSound, router]);
 

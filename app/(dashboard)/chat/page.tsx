@@ -26,7 +26,7 @@ import {
 import clsx from 'clsx';
 import { useAuth } from '@/context/AuthContext';
 import { friendsApi, chatApi } from '@/lib/api';
-import { connectApinator, dmChannelName } from '@/lib/socket';
+import { connectSocket } from '@/lib/socket';
 import type { FriendListItem, ChatMessage } from '@/types';
 
 export default function ChatPageWrapper() {
@@ -58,8 +58,6 @@ function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const activeFriendIdRef = useRef<string | null>(null);
   const userIdRef = useRef<string>('');
-  // Track currently subscribed channel so we can unsubscribe on conversation switch
-  const activeChannelRef = useRef<string | null>(null);
 
   useEffect(() => { activeFriendIdRef.current = activeFriendId; }, [activeFriendId]);
   useEffect(() => { if (user?.id) userIdRef.current = user.id; }, [user?.id]);
@@ -79,27 +77,27 @@ function ChatPage() {
     if (withId) setActiveFriendId(withId);
   }, [searchParams]);
 
-  // ── Subscribe to DM channel when active conversation changes ─
+  // ── Connect socket once user is ready, disconnect on unmount ─
   useEffect(() => {
-    if (!user?.id || !activeFriendId) return;
+    if (!user?.id) return;
+    const socket = connectSocket();
+    return () => {
+      // keep socket alive across page navigations inside dashboard;
+      // only disconnect if the component fully unmounts (user logs out)
+    };
+  }, [user?.id]);
 
-    const apinator = connectApinator();
-    const channelName = dmChannelName(user.id, activeFriendId);
+  // ── Subscribe to incoming messages ────────────────────────
+  useEffect(() => {
+    if (!user?.id) return;
 
-    // Unsubscribe from previous channel if different
-    if (activeChannelRef.current && activeChannelRef.current !== channelName) {
-      apinator.unsubscribe(activeChannelRef.current);
-    }
-    activeChannelRef.current = channelName;
+    const socket = connectSocket();
 
-    const channel = apinator.subscribe(channelName);
-
-    const onMessageReceive = (raw: unknown) => {
-      const data = raw as ChatMessage;
+    const onMessageReceive = (data: ChatMessage) => {
       const myId = userIdRef.current;
       const friendId = activeFriendIdRef.current;
 
-      // Only show messages for this conversation
+      // Only process messages for the active conversation
       const belongsHere =
         friendId !== null &&
         ((data.sender === friendId && data.recipient === myId) ||
@@ -130,24 +128,20 @@ function ChatPage() {
       }
     };
 
-    const onMessageRead = (raw: unknown) => {
-      const data = raw as { type: string; by: string };
-      if (data.type === 'message:read') {
-        setMessages((prev) =>
-          prev.map((m) => (m.recipient === data.by ? { ...m, read: true } : m)),
-        );
-      }
+    const onMessageRead = (data: { by: string }) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.recipient === data.by ? { ...m, read: true } : m)),
+      );
     };
 
-    channel.bind('message:receive', onMessageReceive);
-    // read receipts come through the same DM channel
-    channel.bind('message:receive', onMessageRead);
+    socket.on('message:receive', onMessageReceive);
+    socket.on('message:read', onMessageRead);
 
     return () => {
-      channel.unbind('message:receive', onMessageReceive);
-      channel.unbind('message:receive', onMessageRead);
+      socket.off('message:receive', onMessageReceive);
+      socket.off('message:read', onMessageRead);
     };
-  }, [user?.id, activeFriendId]);
+  }, [user?.id]);
 
   // ── Load conversation history ─────────────────────────
   const loadHistory = useCallback(async (friendId: string, pageNum = 1, append = false) => {
@@ -198,7 +192,7 @@ function ChatPage() {
     setMessages((prev) => [...prev, optimistic]);
 
     try {
-      // REST call → backend saves + triggers Apinator → both sides receive via WS
+      // REST call → backend saves + emits via socket.io to both parties
       await chatApi.saveTextMessageRest(activeFriendId, content);
     } catch {
       toast.error('Failed to send message');
@@ -216,7 +210,7 @@ function ChatPage() {
     setSending(true);
     try {
       await chatApi.uploadImage(activeFriendId, imagePreview.file);
-      // Backend triggers Apinator on both channels — no manual emit needed
+      // Backend saves + emits via socket.io — no manual emit needed
       setImagePreview(null);
     } catch {
       toast.error('Failed to send image');
