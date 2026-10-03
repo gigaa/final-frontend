@@ -522,6 +522,8 @@ function ImageLightbox({
   name: string;
   onClose: () => void;
 }) {
+  const [downloading, setDownloading] = useState(false);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -531,18 +533,34 @@ function ImageLightbox({
   }, [onClose]);
 
   const handleDownload = async () => {
+    if (downloading) return;
+    setDownloading(true);
     try {
-      const res = await fetch(src);
+      // Fetch as blob so browser treats it as a download, not navigation
+      const res = await fetch(src, { mode: 'cors' });
+      if (!res.ok) throw new Error('fetch failed');
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
+      const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url;
-      a.download = name;
+      a.href = objectUrl;
+      a.download = name || 'image';
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      // Small delay before revoking so browser can start the download
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     } catch {
-      // fallback — open in new tab
-      window.open(src, '_blank');
+      // S3 CORS blocked fetch — proxy through backend download if possible
+      // Last resort: force-download via hidden iframe trick
+      const a = document.createElement('a');
+      a.href = src;
+      a.download = name || 'image';
+      a.target = '_self';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -550,7 +568,7 @@ function ImageLightbox({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={onClose}
     >
       {/* Toolbar */}
@@ -562,9 +580,14 @@ function ImageLightbox({
         <div className="flex items-center gap-2">
           <button
             onClick={handleDownload}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition-colors"
+            disabled={downloading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-50 text-white text-xs font-medium transition-colors"
           >
-            <Download size={14} />
+            {downloading ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Download size={14} />
+            )}
             Download
           </button>
           <button
