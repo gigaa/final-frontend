@@ -10,6 +10,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { User } from '@/types';
 import { authApi } from '@/lib/api';
+import { connectSocket, getSocket } from '@/lib/socket';
 import axios from 'axios';
 
 interface AuthContextType {
@@ -34,6 +35,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (stored && token) {
       try {
         setUser(JSON.parse(stored));
+        // Restore socket connection on page refresh
+        connectSocket(token);
       } catch {
         localStorage.removeItem('user');
       }
@@ -45,6 +48,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('user', JSON.stringify(user));
     localStorage.setItem('access_token', token);
     setUser(user);
+    // Connect socket immediately when user authenticates
+    connectSocket(token);
   };
 
   const login = async (email: string, password: string) => {
@@ -85,6 +90,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('user');
     localStorage.removeItem('access_token');
     setUser(null);
+    // Disconnect socket on logout
+    getSocket().disconnect();
     router.push('/login');
   };
 

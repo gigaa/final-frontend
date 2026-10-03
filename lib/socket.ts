@@ -4,8 +4,7 @@ let socket: Socket | null = null;
 
 /**
  * Returns the singleton Socket.io client for the /chat namespace.
- * The socket is created once and lives for the entire browser session.
- * NEXT_PUBLIC_BACKEND_URL must be set so the value is available client-side.
+ * Created once, lives for the full browser session.
  */
 export function getSocket(): Socket {
   if (!socket) {
@@ -17,29 +16,20 @@ export function getSocket(): Socket {
       transports: ["websocket"],
       reconnection: true,
       reconnectionAttempts: Infinity,
-      reconnectionDelay: 1500,
+      reconnectionDelay: 2000,
     });
   }
   return socket;
 }
 
-/**
- * Connect (or re-use) the singleton socket with the given JWT token.
- * Safe to call from multiple components — the socket is shared.
- */
+/** Connect with a JWT token. Safe to call multiple times. */
 export function connectSocket(token: string): Socket {
   const s = getSocket();
+  // Always update auth before connecting so a fresh token is used
   s.auth = { token };
   if (!s.connected) s.connect();
   return s;
 }
 
-/**
- * Called by page-level components when they unmount.
- * We intentionally do NOT disconnect here — GlobalChatListener
- * keeps the socket alive for the full session.
- * The socket is only truly closed when the browser tab closes.
- */
-export function disconnectSocket(): void {
-  // no-op: socket lives for the full browser session
-}
+/** No-op — socket lives for the full session. */
+export function disconnectSocket(): void {}

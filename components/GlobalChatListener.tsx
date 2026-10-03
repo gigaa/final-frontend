@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'react-toastify';
 import { MessageCircle, ImageIcon } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { connectSocket } from '@/lib/socket';
+import { connectSocket, getSocket } from '@/lib/socket';
 import { useNotificationSound } from '@/lib/useNotificationSound';
 import { friendsApi } from '@/lib/api';
 import type { FriendListItem, ChatMessage } from '@/types';
@@ -15,43 +15,44 @@ export default function GlobalChatListener() {
   const router = useRouter();
   const playSound = useNotificationSound();
   const friendsRef = useRef<FriendListItem[]>([]);
+  // Store user.id in a ref so the stable listener closure always has current value
+  const userIdRef = useRef<string>('');
 
-  // Load friends list so we can show the sender name in toasts
+  // ── Keep userIdRef in sync ────────────────────────────
+  useEffect(() => {
+    userIdRef.current = user?.id ?? '';
+  }, [user?.id]);
+
+  // ── Connect socket when user logs in ─────────────────
+  useEffect(() => {
+    if (!user) return;
+
+    const token = typeof window !== 'undefined'
+      ? (localStorage.getItem('access_token') ?? '')
+      : '';
+
+    connectSocket(token);
+  }, [user]);
+
+  // ── Refresh friends list ──────────────────────────────
   useEffect(() => {
     if (!user) return;
     friendsApi.list().then((f) => { friendsRef.current = f; }).catch(() => {});
   }, [user]);
 
+  // ── Attach listeners ONCE (no user dep — stable handlers via refs) ────────
   useEffect(() => {
-    if (!user) return;
-
-    const token =
-      typeof window !== 'undefined'
-        ? (localStorage.getItem('access_token') ?? '')
-        : '';
-
-    const socket = connectSocket(token);
-
-    // If socket was disconnected (e.g. chat page cleanup reduced refCount to 0),
-    // re-connect it — GlobalChatListener must always stay connected.
-    if (!socket.connected) {
-      socket.auth = { token };
-      socket.connect();
-    }
+    const socket = getSocket();
 
     const handleMessage = (msg: ChatMessage) => {
-      // Only handle messages sent to me by someone else
-      if (msg.sender === user.id) return;
+      const myId = userIdRef.current;
+      if (!myId || msg.sender === myId) return;
 
-      // Find sender display name
       const sender = friendsRef.current.find((f) => f.friend._id === msg.sender);
-      const senderName =
-        sender?.friend.name ?? sender?.friend.email ?? 'Someone';
+      const senderName = sender?.friend.name ?? sender?.friend.email ?? 'Someone';
 
-      // Always play sound
       playSound();
 
-      // Don't show toast if we're already on this exact conversation
       const onThisConversation =
         typeof window !== 'undefined' &&
         window.location.pathname.startsWith('/chat') &&
@@ -76,9 +77,7 @@ export default function GlobalChatListener() {
             {senderName[0].toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-white leading-tight">
-              {senderName}
-            </p>
+            <p className="text-sm font-semibold text-white leading-tight">{senderName}</p>
             <p className="text-xs text-gray-300 mt-0.5 flex items-center gap-1">
               {isImage && <ImageIcon size={11} className="flex-shrink-0 text-violet-400" />}
               <span className="truncate">{short}</span>
@@ -105,13 +104,12 @@ export default function GlobalChatListener() {
 
     socket.on('message:receive', handleMessage);
 
-    // GlobalChatListener is mounted for the full session lifetime —
-    // it must NOT call disconnectSocket() or it will kill the shared socket.
+    // No cleanup disconnect — socket lives for the full session
     return () => {
       socket.off('message:receive', handleMessage);
-      // intentionally no disconnectSocket() here
     };
-  }, [user, playSound, router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ← empty deps: register once, use refs for current values
 
   return null;
 }
