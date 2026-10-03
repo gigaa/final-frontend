@@ -395,6 +395,45 @@ function ChatPage() {
   );
 }
 
+// ── Message Text (linkify) ───────────────────────────────
+
+const URL_REGEX = /https?:\/\/[^\s<>"']+/g;
+
+function MessageText({ content, isMine }: { content: string; isMine: boolean }) {
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  URL_REGEX.lastIndex = 0;
+  while ((match = URL_REGEX.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(content.slice(lastIndex, match.index));
+    }
+    const url = match[0];
+    parts.push(
+      <a
+        key={match.index}
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={clsx(
+          'underline underline-offset-2 break-all',
+          isMine ? 'text-violet-200 hover:text-white' : 'text-violet-400 hover:text-violet-300',
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {url}
+      </a>,
+    );
+    lastIndex = match.index + url.length;
+  }
+  if (lastIndex < content.length) {
+    parts.push(content.slice(lastIndex));
+  }
+
+  return <>{parts}</>;
+}
+
 // ── Image Lightbox ───────────────────────────────────────
 
 function ImageLightbox({
@@ -509,7 +548,7 @@ function MessageBubble({
               {msg.imageOriginalName && <p className="text-xs opacity-70 truncate max-w-[12rem]">{msg.imageOriginalName}</p>}
             </div>
           ) : (
-            <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+            <p className="whitespace-pre-wrap break-words"><MessageText content={msg.content} isMine={isMine} /></p>
           )}
           <div className={clsx('flex items-center gap-1 mt-1', isMine ? 'justify-end' : 'justify-start')}>
             <span className="text-[10px] opacity-60">{time}</span>
