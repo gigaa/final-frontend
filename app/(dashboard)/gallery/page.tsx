@@ -9,8 +9,9 @@ import Button from '@/components/ui/Button';
 import ConfirmModal from '@/components/ConfirmModal';
 import {
   Upload, Images, ChevronLeft, ChevronRight,
-  CheckSquare, Square, Trash2, Download, X,
+  CheckSquare, Square, Trash2, Download, X, Share2,
 } from 'lucide-react';
+import ShareModal from '@/components/ShareModal';
 import { toast } from 'react-hot-toast';
 import clsx from 'clsx';
 
@@ -27,6 +28,7 @@ export default function GalleryPage() {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkDling,    setBulkDling]    = useState(false);
   const [bulkConfirm,  setBulkConfirm]  = useState(false);
+  const [bulkShareOpen, setBulkShareOpen] = useState(false);
 
   const fetchImages = useCallback(async (p: number) => {
     setLoading(true);
@@ -259,6 +261,21 @@ export default function GalleryPage() {
             Download{selectedCount > 0 ? ` (${selectedCount})` : ''}
           </button>
 
+          {/* Bulk share */}
+          <button
+            onClick={() => selectedCount > 0 && setBulkShareOpen(true)}
+            disabled={selectedCount === 0 || bulkDeleting || bulkDling}
+            className={clsx(
+              'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all',
+              selectedCount > 0
+                ? 'border-violet-600/40 text-violet-400 hover:bg-violet-600/20 hover:border-violet-500/50'
+                : 'border-gray-800 text-gray-600 cursor-not-allowed',
+            )}
+          >
+            <Share2 size={14} />
+            Share{selectedCount > 0 ? ` (${selectedCount})` : ''}
+          </button>
+
           {/* Bulk delete */}
           <button
             onClick={() => selectedCount > 0 && setBulkConfirm(true)}
@@ -358,6 +375,13 @@ export default function GalleryPage() {
       onConfirm={handleBulkDelete}
       onCancel={() => setBulkConfirm(false)}
     />
+
+    {bulkShareOpen && (
+      <ShareModal
+        images={images.filter((img) => selectedIds.has(img._id))}
+        onClose={() => setBulkShareOpen(false)}
+      />
+    )}
     </>
   );
 }

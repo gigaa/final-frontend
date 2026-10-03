@@ -12,12 +12,17 @@ import { getSocket } from '@/lib/socket';
 import type { FriendListItem, ImageRecord } from '@/types';
 
 interface Props {
-  image: ImageRecord;
+  /** Pass a single image OR an array for bulk-share */
+  image?: ImageRecord;
+  images?: ImageRecord[];
   onClose: () => void;
 }
 
-export default function ShareModal({ image, onClose }: Props) {
+export default function ShareModal({ image, images: imagesProp, onClose }: Props) {
   const router = useRouter();
+  // normalise: always work with an array
+  const images: ImageRecord[] = imagesProp ?? (image ? [image] : []);
+  const isBulk = images.length > 1;
   const [friends, setFriends] = useState<FriendListItem[]>([]);
   const [filtered, setFiltered] = useState<FriendListItem[]>([]);
   const [query, setQuery] = useState('');
@@ -67,11 +72,12 @@ export default function ShareModal({ image, onClose }: Props) {
   };
 
   const handleCopy = async () => {
-    const url = image.url ?? '';
+    // For bulk: copy all URLs joined by newline; for single: copy the one URL
+    const text = images.map((img) => img.url ?? '').join('\n');
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(text);
       setCopied(true);
-      toast.success('Link copied to clipboard');
+      toast.success(isBulk ? `${images.length} links copied` : 'Link copied to clipboard');
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error('Failed to copy link');
@@ -83,30 +89,31 @@ export default function ShareModal({ image, onClose }: Props) {
 
     setSending((prev) => new Set(prev).add(friendId));
     try {
-      // Upload the image to the chat (re-fetch blob then upload as chat image)
-      // Download through backend proxy (avoids S3 CORS)
-      const { blob } = await imagesApi.downloadBlob(image._id, image.originalName);
-      const file = new File([blob], image.originalName, { type: image.mimetype });
+      for (const img of images) {
+        // Download through backend proxy (avoids S3 CORS)
+        const { blob } = await imagesApi.downloadBlob(img._id, img.originalName);
+        const file = new File([blob], img.originalName, { type: img.mimetype });
 
-      const msg = await chatApi.uploadImage(friendId, file);
+        const msg = await chatApi.uploadImage(friendId, file);
 
-      // Notify via socket so recipient gets it instantly
-      try {
-        const socket = getSocket();
-        if (socket.connected) {
-          socket.emit('message:image', {
-            recipientId: friendId,
-            messageId: String((msg as any)._id),
-            imageUrl: (msg as any).imageUrl,
-            imageOriginalName: msg.imageOriginalName ?? image.originalName,
-          });
+        // Notify via socket so recipient gets it instantly
+        try {
+          const socket = getSocket();
+          if (socket.connected) {
+            socket.emit('message:image', {
+              recipientId: friendId,
+              messageId: String((msg as any)._id),
+              imageUrl: (msg as any).imageUrl,
+              imageOriginalName: msg.imageOriginalName ?? img.originalName,
+            });
+          }
+        } catch {
+          // Socket not connected — REST delivery is enough
         }
-      } catch {
-        // Socket not connected — REST delivery is enough
       }
 
       setSentSet((prev) => new Set(prev).add(friendId));
-      toast.success(`Sent to ${friendName}`);
+      toast.success(isBulk ? `${images.length} images sent to ${friendName}` : `Sent to ${friendName}`);
     } catch {
       toast.error(`Failed to send to ${friendName}`);
     } finally {
@@ -135,7 +142,7 @@ export default function ShareModal({ image, onClose }: Props) {
             {copied ? <Check size={16} className="text-green-400" /> : <Search size={16} />}
           </button>
           <h2 className="flex-1 text-center text-white font-semibold text-base">
-            Share to
+            {isBulk ? `Share ${images.length} images` : 'Share to'}
           </h2>
           <button
             onClick={onClose}
@@ -239,7 +246,7 @@ export default function ShareModal({ image, onClose }: Props) {
             ) : (
               <>
                 <Copy size={15} />
-                Copy image link
+                {isBulk ? `Copy ${images.length} links` : 'Copy image link'}
               </>
             )}
           </button>
