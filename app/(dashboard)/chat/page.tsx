@@ -7,6 +7,7 @@ import {
   useCallback,
   Suspense,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import toast from 'react-hot-toast';
@@ -19,6 +20,7 @@ import {
   Loader2,
   Check,
   CheckCheck,
+  Download,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '@/context/AuthContext';
@@ -509,6 +511,88 @@ function ChatPage() {
   );
 }
 
+// ── Image Lightbox ───────────────────────────────────────
+
+function ImageLightbox({
+  src,
+  name,
+  onClose,
+}: {
+  src: string;
+  name: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  const handleDownload = async () => {
+    try {
+      const res = await fetch(src);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // fallback — open in new tab
+      window.open(src, '_blank');
+    }
+  };
+
+  if (typeof window === 'undefined') return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      {/* Toolbar */}
+      <div
+        className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/60 to-transparent"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="text-white/80 text-sm truncate max-w-[60vw]">{name}</p>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleDownload}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition-colors"
+          >
+            <Download size={14} />
+            Download
+          </button>
+          <button
+            onClick={onClose}
+            className="flex items-center justify-center w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      </div>
+
+      {/* Image */}
+      <div
+        className="relative max-w-[90vw] max-h-[85vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt={name}
+          className="max-w-[90vw] max-h-[85vh] object-contain rounded-xl shadow-2xl"
+        />
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 // ── Message Bubble ────────────────────────────────────────
 
 function MessageBubble({
@@ -518,52 +602,53 @@ function MessageBubble({
   msg: ChatMessage;
   isMine: boolean;
 }) {
+  const [lightbox, setLightbox] = useState(false);
+
   const time = new Date(msg.createdAt).toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
   });
 
   return (
-    <div
-      className={clsx(
-        'flex items-end gap-1.5 max-w-[75%]',
-        isMine ? 'ml-auto flex-row-reverse' : 'mr-auto',
-      )}
-    >
+    <>
       <div
         className={clsx(
-          'rounded-2xl px-3.5 py-2 text-sm shadow-sm',
-          isMine
-            ? 'bg-violet-600 text-white rounded-br-sm'
-            : 'bg-gray-800 text-gray-100 rounded-bl-sm',
+          'flex items-end gap-1.5 max-w-[75%]',
+          isMine ? 'ml-auto flex-row-reverse' : 'mr-auto',
         )}
       >
-        {msg.type === 'image' && msg.imageUrl ? (
-          <div className="space-y-1">
-            <a
-              href={msg.imageUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block"
-            >
-              <div className="relative w-48 h-48 rounded-lg overflow-hidden">
-                <Image
-                  src={msg.imageUrl}
-                  alt={msg.imageOriginalName ?? 'image'}
-                  fill
-                  className="object-cover hover:opacity-90 transition-opacity"
-                />
-              </div>
-            </a>
-            {msg.imageOriginalName && (
-              <p className="text-xs opacity-70 truncate max-w-[12rem]">
-                {msg.imageOriginalName}
-              </p>
-            )}
-          </div>
-        ) : (
-          <p className="whitespace-pre-wrap break-words">{msg.content}</p>
-        )}
+        <div
+          className={clsx(
+            'rounded-2xl px-3.5 py-2 text-sm shadow-sm',
+            isMine
+              ? 'bg-violet-600 text-white rounded-br-sm'
+              : 'bg-gray-800 text-gray-100 rounded-bl-sm',
+          )}
+        >
+          {msg.type === 'image' && msg.imageUrl ? (
+            <div className="space-y-1">
+              <button
+                onClick={() => setLightbox(true)}
+                className="block focus:outline-none"
+              >
+                <div className="relative w-48 h-48 rounded-lg overflow-hidden">
+                  <Image
+                    src={msg.imageUrl}
+                    alt={msg.imageOriginalName ?? 'image'}
+                    fill
+                    className="object-cover hover:opacity-90 transition-opacity"
+                  />
+                </div>
+              </button>
+              {msg.imageOriginalName && (
+                <p className="text-xs opacity-70 truncate max-w-[12rem]">
+                  {msg.imageOriginalName}
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+          )}
 
         {/* Time + read receipt */}
         <div
@@ -585,5 +670,14 @@ function MessageBubble({
         </div>
       </div>
     </div>
+
+      {lightbox && msg.imageUrl && (
+        <ImageLightbox
+          src={msg.imageUrl}
+          name={msg.imageOriginalName ?? 'image'}
+          onClose={() => setLightbox(false)}
+        />
+      )}
+    </>
   );
 }
