@@ -25,7 +25,9 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '@/context/AuthContext';
-import { friendsApi, chatApi } from '@/lib/api';import { connectSocket, disconnectSocket, getSocket } from '@/lib/socket';
+import { friendsApi, chatApi } from '@/lib/api';
+import { connectSocket, disconnectSocket, getSocket } from '@/lib/socket';
+import { useNotificationSound } from '@/lib/useNotificationSound';
 import type { FriendListItem, ChatMessage } from '@/types';
 
 // ── Main export wraps in Suspense (required for useSearchParams in Next 16) ──
@@ -41,6 +43,7 @@ function ChatPage() {
   const { user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const playNotificationSound = useNotificationSound();
 
   const [friends, setFriends] = useState<FriendListItem[]>([]);
   const [activeFriendId, setActiveFriendId] = useState<string | null>(null);
@@ -70,28 +73,8 @@ function ChatPage() {
   }, [activeFriendId]);
 
   // ── Notification sound ────────────────────────────────
-  const playNotificationSound = useCallback(() => {
-    try {
-      const ctx = new (window.AudioContext ||
-        (window as any).webkitAudioContext)();
-      const oscillator = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-      oscillator.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(880, ctx.currentTime);
-      oscillator.frequency.exponentialRampToValueAtTime(
-        440,
-        ctx.currentTime + 0.15,
-      );
-      gainNode.gain.setValueAtTime(0.25, ctx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-      oscillator.start(ctx.currentTime);
-      oscillator.stop(ctx.currentTime + 0.3);
-    } catch {
-      // AudioContext not available — silently ignore
-    }
-  }, []);
+  // provided by useNotificationSound hook (see lib/useNotificationSound.ts)
+
 
   const activeFriend = friends.find(
     (f) => f.friend._id === activeFriendId,
