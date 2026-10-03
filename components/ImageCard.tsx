@@ -8,6 +8,7 @@ import { imagesApi } from '@/lib/api';
 import { toast } from 'react-hot-toast';
 import clsx from 'clsx';
 import ShareModal from './ShareModal';
+import ConfirmModal from './ConfirmModal';
 
 interface Props {
   image: ImageRecord;
@@ -35,11 +36,11 @@ export default function ImageCard({
   const [downloading, setDownloading] = useState(false);
   const [imgError,    setImgError]    = useState(false);
   const [shareOpen,   setShareOpen]   = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const src = image.url ?? '';
 
   const handleDelete = async () => {
-    if (!confirm('Delete this image?')) return;
     setDeleting(true);
     try {
       await imagesApi.delete(image._id);
@@ -48,6 +49,8 @@ export default function ImageCard({
     } catch {
       toast.error('Failed to delete');
       setDeleting(false);
+    } finally {
+      setConfirmOpen(false);
     }
   };
 
@@ -170,7 +173,7 @@ export default function ImageCard({
                   <Share2 size={14} />
                 </button> */}
                 <button
-                  onClick={handleDelete}
+                  onClick={(e) => { e.stopPropagation(); setConfirmOpen(true); }}
                   disabled={deleting}
                   className={clsx(
                     'flex items-center justify-center w-9 h-9 rounded-xl transition-colors',
@@ -180,8 +183,7 @@ export default function ImageCard({
                   )}
                 >
                   <Trash2 size={14} />
-                </button>
-              </div>
+                </button>              </div>
             </>
           )}
         </div>
@@ -207,6 +209,17 @@ export default function ImageCard({
           onClose={() => setShareOpen(false)}
         />
       )}
+
+      {/* ── Delete Confirm Modal ── */}
+      <ConfirmModal
+        open={confirmOpen}
+        title="Delete image"
+        message={`"${image.originalName}" will be permanently deleted. This cannot be undone.`}
+        confirmLabel="Delete"
+        loading={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </>
   );
 }

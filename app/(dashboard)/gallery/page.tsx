@@ -6,6 +6,7 @@ import { imagesApi } from '@/lib/api';
 import { ImageRecord } from '@/types';
 import ImageCard from '@/components/ImageCard';
 import Button from '@/components/ui/Button';
+import ConfirmModal from '@/components/ConfirmModal';
 import {
   Upload, Images, ChevronLeft, ChevronRight,
   CheckSquare, Square, Trash2, Download, X,
@@ -25,6 +26,7 @@ export default function GalleryPage() {
   const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkDling,    setBulkDling]    = useState(false);
+  const [bulkConfirm,  setBulkConfirm]  = useState(false);
 
   const fetchImages = useCallback(async (p: number) => {
     setLoading(true);
@@ -80,8 +82,8 @@ export default function GalleryPage() {
   // ── bulk delete ──
   const handleBulkDelete = async () => {
     if (!selectedIds.size) return;
-    if (!confirm(`Delete ${selectedIds.size} image${selectedIds.size > 1 ? 's' : ''}?`)) return;
     setBulkDeleting(true);
+    setBulkConfirm(false);
     let count = 0;
     for (const id of selectedIds) {
       try {
@@ -159,6 +161,7 @@ export default function GalleryPage() {
   const selectedCount = selectedIds.size;
 
   return (
+    <>
     <div className="fade-in">
 
       {/* ── Header ── */}
@@ -258,7 +261,7 @@ export default function GalleryPage() {
 
           {/* Bulk delete */}
           <button
-            onClick={handleBulkDelete}
+            onClick={() => selectedCount > 0 && setBulkConfirm(true)}
             disabled={selectedCount === 0 || bulkDeleting || bulkDling}
             className={clsx(
               'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all',
@@ -345,5 +348,16 @@ export default function GalleryPage() {
         </>
       )}
     </div>
+
+    <ConfirmModal
+      open={bulkConfirm}
+      title={`Delete ${selectedCount} image${selectedCount !== 1 ? 's' : ''}`}
+      message={`${selectedCount} image${selectedCount !== 1 ? 's' : ''} will be permanently deleted. This cannot be undone.`}
+      confirmLabel="Delete all"
+      loading={bulkDeleting}
+      onConfirm={handleBulkDelete}
+      onCancel={() => setBulkConfirm(false)}
+    />
+    </>
   );
 }
