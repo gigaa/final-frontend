@@ -1,6 +1,9 @@
 import type { Metadata } from 'next';
 import { Toaster } from 'react-hot-toast';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import { AuthProvider } from '@/context/AuthContext';
+import GlobalChatListener from '@/components/GlobalChatListener';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -18,6 +21,8 @@ export default function RootLayout({
       <body className="bg-gray-950 text-gray-100 min-h-screen">
         <AuthProvider>
           {children}
+
+          {/* react-hot-toast — for existing UI toasts (upload, delete, etc.) */}
           <Toaster
             position="top-right"
             toastOptions={{
@@ -33,6 +38,20 @@ export default function RootLayout({
               },
             }}
           />
+
+          {/* react-toastify — for chat notifications (bottom-right) */}
+          <ToastContainer
+            position="bottom-right"
+            newestOnTop
+            closeButton
+            draggable
+            pauseOnHover
+            theme="dark"
+            limit={4}
+          />
+
+          {/* Global socket listener — plays sound + shows toast on any page */}
+          <GlobalChatListener />
         </AuthProvider>
       </body>
     </html>

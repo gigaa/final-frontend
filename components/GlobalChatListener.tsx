@@ -1,0 +1,105 @@
+'use client';
+
+import { useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'react-toastify';
+import { MessageCircle, ImageIcon } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { connectSocket, disconnectSocket } from '@/lib/socket';
+import { useNotificationSound } from '@/lib/useNotificationSound';
+import { friendsApi } from '@/lib/api';
+import type { FriendListItem, ChatMessage } from '@/types';
+
+export default function GlobalChatListener() {
+  const { user } = useAuth();
+  const router = useRouter();
+  const playSound = useNotificationSound();
+  const friendsRef = useRef<FriendListItem[]>([]);
+
+  // Load friends list so we can show sender name in toasts
+  useEffect(() => {
+    if (!user) return;
+    friendsApi.list().then((f) => { friendsRef.current = f; }).catch(() => {});
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const token =
+      typeof window !== 'undefined'
+        ? (localStorage.getItem('access_token') ?? '')
+        : '';
+
+    const socket = connectSocket(token);
+
+    const handleMessage = (msg: ChatMessage) => {
+      // Only react to messages sent BY someone else TO me
+      if (msg.sender === user.id) return;
+
+      // Find sender name
+      const sender = friendsRef.current.find((f) => f.friend._id === msg.sender);
+      const senderName = sender?.friend.name ?? sender?.friend.email ?? 'Someone';
+
+      // Play sound on every incoming message regardless of current page
+      playSound();
+
+      // Check if we're already on this conversation
+      const onChatPage =
+        typeof window !== 'undefined' &&
+        window.location.pathname.startsWith('/chat') &&
+        new URLSearchParams(window.location.search).get('with') === msg.sender;
+
+      if (onChatPage) return; // chat page handles its own display
+
+      // Show react-toastify notification
+      const isImage = msg.type === 'image';
+      const preview = isImage ? '📷 Sent you an image' : msg.content;
+      const short = preview.length > 60 ? preview.slice(0, 57) + '…' : preview;
+
+      toast(
+        <div
+          className="flex items-start gap-3 cursor-pointer"
+          onClick={() => router.push(`/chat?with=${msg.sender}`)}
+        >
+          {/* Avatar */}
+          <div className="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold">
+            {senderName[0].toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white leading-tight">
+              {senderName}
+            </p>
+            <p className="text-xs text-gray-300 mt-0.5 truncate flex items-center gap-1">
+              {isImage && <ImageIcon size={11} className="flex-shrink-0" />}
+              {short}
+            </p>
+          </div>
+          <MessageCircle size={15} className="flex-shrink-0 text-violet-400 mt-0.5" />
+        </div>,
+        {
+          toastId: `chat-${msg.sender}`, // collapse rapid messages from same sender
+          position: 'bottom-right',
+          autoClose: 5000,
+          closeOnClick: false,
+          style: {
+            background: '#111827',
+            border: '1px solid #374151',
+            borderRadius: '14px',
+            padding: '10px 12px',
+            cursor: 'default',
+          },
+          icon: false,
+        },
+      );
+    };
+
+    socket.on('message:receive', handleMessage);
+
+    return () => {
+      socket.off('message:receive', handleMessage);
+      disconnectSocket();
+    };
+  }, [user, playSound, router]);
+
+  return null;
+}
