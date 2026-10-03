@@ -62,6 +62,36 @@ function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const socketReady = useRef(false);
+  const activeFriendIdRef = useRef<string | null>(null);
+
+  // Keep ref in sync with state so socket listeners always see current value
+  useEffect(() => {
+    activeFriendIdRef.current = activeFriendId;
+  }, [activeFriendId]);
+
+  // ── Notification sound ────────────────────────────────
+  const playNotificationSound = useCallback(() => {
+    try {
+      const ctx = new (window.AudioContext ||
+        (window as any).webkitAudioContext)();
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(
+        440,
+        ctx.currentTime + 0.15,
+      );
+      gainNode.gain.setValueAtTime(0.25, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+      oscillator.start(ctx.currentTime);
+      oscillator.stop(ctx.currentTime + 0.3);
+    } catch {
+      // AudioContext not available — silently ignore
+    }
+  }, []);
 
   const activeFriend = friends.find(
     (f) => f.friend._id === activeFriendId,
@@ -98,29 +128,36 @@ function ChatPage() {
     socketReady.current = true;
 
     socket.on('message:receive', (msg: ChatMessage) => {
+      const currentFriendId = activeFriendIdRef.current;
+      const isActiveConversation =
+        currentFriendId !== null &&
+        (msg.sender === currentFriendId || msg.recipient === currentFriendId);
+
       setMessages((prev) => {
-        // Deduplicate — the gateway echoes to both sender and recipient
+        // Only add to visible messages if this belongs to the active conversation
+        if (!isActiveConversation) return prev;
+        // Deduplicate by _id
         if (prev.some((m) => m._id === msg._id)) return prev;
         return [...prev, msg];
       });
 
-      // If this is from the active conversation, mark read immediately
-      setActiveFriendId((currentFriendId) => {
-        if (
-          currentFriendId &&
-          (msg.sender === currentFriendId || msg.recipient === currentFriendId)
-        ) {
-          chatApi.markRead(currentFriendId).catch(() => {});
-          socket.emit('message:read', { friendId: currentFriendId });
-        } else if (msg.sender !== user.id) {
-          // Increment unread badge for other conversations
-          setUnreadCounts((prev) => ({
-            ...prev,
-            [msg.sender]: (prev[msg.sender] ?? 0) + 1,
-          }));
-        }
-        return currentFriendId;
-      });
+      if (isActiveConversation) {
+        // Mark as read immediately
+        chatApi.markRead(currentFriendId!).catch(() => {});
+        socket.emit('message:read', { friendId: currentFriendId });
+      } else if (msg.sender !== user.id) {
+        // Incoming message from another conversation — badge + sound
+        setUnreadCounts((prev) => ({
+          ...prev,
+          [msg.sender]: (prev[msg.sender] ?? 0) + 1,
+        }));
+        playNotificationSound();
+      }
+
+      // Play sound for incoming messages in active conversation too
+      if (isActiveConversation && msg.sender !== user.id) {
+        playNotificationSound();
+      }
     });
 
     socket.on('message:read', ({ by }: { by: string }) => {
@@ -167,7 +204,7 @@ function ChatPage() {
       disconnectSocket();
       socketReady.current = false;
     };
-  }, [user]);
+  }, [user, playNotificationSound]);
 
   // ── Load conversation history ─────────────────────────
   const loadHistory = useCallback(
