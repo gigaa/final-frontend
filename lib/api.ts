@@ -174,4 +174,29 @@ export const chatApi = {
 
   getUnreadCounts: () =>
     api.get<Record<string, number>>("/chat/unread").then((r) => r.data),
+
+  downloadImage: async (
+    messageId: string,
+    originalName: string,
+  ): Promise<void> => {
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("access_token")
+        : null;
+
+    const res = await fetch(`/api/chat/messages/${messageId}/download`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = originalName || "image";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
 };

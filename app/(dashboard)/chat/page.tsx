@@ -24,8 +24,7 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '@/context/AuthContext';
-import { friendsApi, chatApi } from '@/lib/api';
-import { connectSocket, disconnectSocket, getSocket } from '@/lib/socket';
+import { friendsApi, chatApi } from '@/lib/api';import { connectSocket, disconnectSocket, getSocket } from '@/lib/socket';
 import type { FriendListItem, ChatMessage } from '@/types';
 
 // ── Main export wraps in Suspense (required for useSearchParams in Next 16) ──
@@ -408,8 +407,7 @@ function ChatPage() {
                 key={msg._id ?? idx}
                 msg={msg}
                 isMine={msg.sender === user?.id}
-              />
-            ))}
+              />            ))}
             <div ref={bottomRef} />
           </div>
 
@@ -516,10 +514,12 @@ function ChatPage() {
 function ImageLightbox({
   src,
   name,
+  messageId,
   onClose,
 }: {
   src: string;
   name: string;
+  messageId?: string;
   onClose: () => void;
 }) {
   const [downloading, setDownloading] = useState(false);
@@ -536,29 +536,25 @@ function ImageLightbox({
     if (downloading) return;
     setDownloading(true);
     try {
-      // Fetch as blob so browser treats it as a download, not navigation
-      const res = await fetch(src, { mode: 'cors' });
-      if (!res.ok) throw new Error('fetch failed');
-      const blob = await res.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = objectUrl;
-      a.download = name || 'image';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      // Small delay before revoking so browser can start the download
-      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      if (messageId) {
+        // Proxy through backend — avoids S3 CORS entirely
+        await chatApi.downloadImage(messageId, name || 'image');
+      } else {
+        // Fallback: direct fetch (works if S3 CORS allows it)
+        const res = await fetch(src, { mode: 'cors' });
+        if (!res.ok) throw new Error('fetch failed');
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = name || 'image';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      }
     } catch {
-      // S3 CORS blocked fetch — proxy through backend download if possible
-      // Last resort: force-download via hidden iframe trick
-      const a = document.createElement('a');
-      a.href = src;
-      a.download = name || 'image';
-      a.target = '_self';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      toast.error('Download failed');
     } finally {
       setDownloading(false);
     }
@@ -698,6 +694,7 @@ function MessageBubble({
         <ImageLightbox
           src={msg.imageUrl}
           name={msg.imageOriginalName ?? 'image'}
+          messageId={msg._id}
           onClose={() => setLightbox(false)}
         />
       )}
