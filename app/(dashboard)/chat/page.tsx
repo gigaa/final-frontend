@@ -155,14 +155,16 @@ function ChatPage() {
       });
     });
 
-    // Request current online list on connect
-    socket.on('connect', () => {
-      socket.emit('users:online');
-    });
-
+    // Server sends users:online automatically on connection (after auth)
     socket.on('users:online', ({ users }: { users: string[] }) => {
       setOnlineUsers(new Set(users));
     });
+
+    // If socket was already connected before this component mounted,
+    // request the online list explicitly
+    if (socket.connected) {
+      socket.emit('users:online');
+    }
 
     socket.on('error', ({ message }: { message: string }) => {
       toast.error(message);
@@ -173,7 +175,6 @@ function ChatPage() {
       socket.off('message:read');
       socket.off('user:online');
       socket.off('user:offline');
-      socket.off('connect');
       socket.off('users:online');
       socket.off('error');
       disconnectSocket();

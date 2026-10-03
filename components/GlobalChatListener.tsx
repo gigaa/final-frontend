@@ -16,7 +16,7 @@ export default function GlobalChatListener() {
   const playSound = useNotificationSound();
   const friendsRef = useRef<FriendListItem[]>([]);
 
-  // Load friends list so we can show sender name in toasts
+  // Load friends list so we can show the sender name in toasts
   useEffect(() => {
     if (!user) return;
     friendsApi.list().then((f) => { friendsRef.current = f; }).catch(() => {});
@@ -33,35 +33,38 @@ export default function GlobalChatListener() {
     const socket = connectSocket(token);
 
     const handleMessage = (msg: ChatMessage) => {
-      // Only react to messages sent BY someone else TO me
+      // Only handle messages sent to me by someone else
       if (msg.sender === user.id) return;
 
-      // Find sender name
+      // Find sender display name
       const sender = friendsRef.current.find((f) => f.friend._id === msg.sender);
-      const senderName = sender?.friend.name ?? sender?.friend.email ?? 'Someone';
+      const senderName =
+        sender?.friend.name ?? sender?.friend.email ?? 'Someone';
 
-      // Play sound on every incoming message regardless of current page
+      // Always play sound
       playSound();
 
-      // Check if we're already on this conversation
-      const onChatPage =
+      // Don't show toast if we're already on this exact conversation
+      const onThisConversation =
         typeof window !== 'undefined' &&
         window.location.pathname.startsWith('/chat') &&
         new URLSearchParams(window.location.search).get('with') === msg.sender;
 
-      if (onChatPage) return; // chat page handles its own display
+      if (onThisConversation) return;
 
-      // Show react-toastify notification
       const isImage = msg.type === 'image';
       const preview = isImage ? '📷 Sent you an image' : msg.content;
       const short = preview.length > 60 ? preview.slice(0, 57) + '…' : preview;
 
       toast(
         <div
-          className="flex items-start gap-3 cursor-pointer"
-          onClick={() => router.push(`/chat?with=${msg.sender}`)}
+          className="flex items-start gap-3"
+          onClick={() => {
+            router.push(`/chat?with=${msg.sender}`);
+            toast.dismiss(`chat-${msg.sender}`);
+          }}
+          style={{ cursor: 'pointer' }}
         >
-          {/* Avatar */}
           <div className="flex-shrink-0 w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold">
             {senderName[0].toUpperCase()}
           </div>
@@ -69,24 +72,24 @@ export default function GlobalChatListener() {
             <p className="text-sm font-semibold text-white leading-tight">
               {senderName}
             </p>
-            <p className="text-xs text-gray-300 mt-0.5 truncate flex items-center gap-1">
-              {isImage && <ImageIcon size={11} className="flex-shrink-0" />}
-              {short}
+            <p className="text-xs text-gray-300 mt-0.5 flex items-center gap-1">
+              {isImage && <ImageIcon size={11} className="flex-shrink-0 text-violet-400" />}
+              <span className="truncate">{short}</span>
             </p>
           </div>
           <MessageCircle size={15} className="flex-shrink-0 text-violet-400 mt-0.5" />
         </div>,
         {
-          toastId: `chat-${msg.sender}`, // collapse rapid messages from same sender
+          toastId: `chat-${msg.sender}`,
+          updateId: `chat-${msg.sender}`,
           position: 'bottom-right',
           autoClose: 5000,
           closeOnClick: false,
           style: {
             background: '#111827',
-            border: '1px solid #374151',
+            border: '1px solid #4c1d95',
             borderRadius: '14px',
             padding: '10px 12px',
-            cursor: 'default',
           },
           icon: false,
         },
