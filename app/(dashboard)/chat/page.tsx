@@ -470,7 +470,30 @@ function ChatPage() {
 
 const URL_REGEX = /https?:\/\/[^\s<>"']+/g;
 
-function MessageText({ content, isMine }: { content: string; isMine: boolean }) {
+/** Heuristic: treat a URL as an image if it points to a known image path */
+function isImageUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    // S3 presigned URLs (amazonaws.com) with image extensions
+    const path = u.pathname.toLowerCase();
+    if (/\.(png|jpe?g|gif|webp|avif|bmp|svg)(\?|$)/.test(path)) return true;
+    // S3 bucket originals / chat-images paths
+    if (u.hostname.includes('amazonaws.com') && (path.includes('/originals/') || path.includes('/chat-images/'))) return true;
+  } catch {
+    // ignore invalid URLs
+  }
+  return false;
+}
+
+function MessageText({
+  content,
+  isMine,
+  onImageClick,
+}: {
+  content: string;
+  isMine: boolean;
+  onImageClick?: (url: string) => void;
+}) {
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -481,21 +504,42 @@ function MessageText({ content, isMine }: { content: string; isMine: boolean }) 
       parts.push(content.slice(lastIndex, match.index));
     }
     const url = match[0];
-    parts.push(
-      <a
-        key={match.index}
-        href={url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={clsx(
-          'underline underline-offset-2 break-all',
-          isMine ? 'text-violet-200 hover:text-white' : 'text-violet-400 hover:text-violet-300',
-        )}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {url}
-      </a>,
-    );
+
+    if (isImageUrl(url) && onImageClick) {
+      // Render as a clickable inline image thumbnail
+      parts.push(
+        <button
+          key={match.index}
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onImageClick(url); }}
+          className="block mt-1 focus:outline-none"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={url}
+            alt="shared image"
+            className="max-w-[200px] max-h-[200px] rounded-lg object-cover hover:opacity-90 transition-opacity border border-white/10"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+          />
+        </button>,
+      );
+    } else {
+      parts.push(
+        <a
+          key={match.index}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={clsx(
+            'underline underline-offset-2 break-all',
+            isMine ? 'text-violet-200 hover:text-white' : 'text-violet-400 hover:text-violet-300',
+          )}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {url}
+        </a>,
+      );
+    }
     lastIndex = match.index + url.length;
   }
   if (lastIndex < content.length) {
@@ -604,6 +648,7 @@ function MessageBubble({
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState(msg.content);
   const [deleting, setDeleting] = useState(false);
+  const [linkedImageUrl, setLinkedImageUrl] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const editRef = useRef<HTMLTextAreaElement>(null);
 
@@ -716,7 +761,13 @@ function MessageBubble({
               </div>
             </div>
           ) : (
-            <p className="whitespace-pre-wrap break-words"><MessageText content={msg.content} isMine={isMine} /></p>
+            <p className="whitespace-pre-wrap break-words">
+              <MessageText
+                content={msg.content}
+                isMine={isMine}
+                onImageClick={(url) => setLinkedImageUrl(url)}
+              />
+            </p>
           )}
           <div className={clsx('flex items-center gap-1 mt-1', isMine ? 'justify-end' : 'justify-start')}>
             <span className="text-[10px] opacity-60">{time}</span>
@@ -731,6 +782,13 @@ function MessageBubble({
       </div>
       {lightbox && msg.imageUrl && (
         <ImageLightbox images={allImages} initialIndex={imageIndex} onClose={() => setLightbox(false)} />
+      )}
+      {linkedImageUrl && (
+        <ImageLightbox
+          images={[{ src: linkedImageUrl, name: 'image' }]}
+          initialIndex={0}
+          onClose={() => setLinkedImageUrl(null)}
+        />
       )}
     </>
   );
