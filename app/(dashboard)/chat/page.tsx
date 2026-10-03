@@ -16,6 +16,7 @@ import {
   ImageIcon,
   X,
   ChevronLeft,
+  ChevronRight,
   Users,
   Loader2,
   Check,
@@ -402,12 +403,31 @@ function ChatPage() {
               </div>
             )}
 
-            {messages.map((msg, idx) => (
-              <MessageBubble
-                key={msg._id ?? idx}
-                msg={msg}
-                isMine={msg.sender === user?.id}
-              />            ))}
+            {(() => {
+              // Build ordered list of image messages for lightbox navigation
+              const imageMessages = messages
+                .filter((m) => m.type === 'image' && m.imageUrl)
+                .map((m) => ({
+                  src: m.imageUrl!,
+                  name: m.imageOriginalName ?? 'image',
+                  messageId: m._id,
+                }));
+
+              return messages.map((msg, idx) => {
+                const imageIndex = imageMessages.findIndex(
+                  (im) => im.messageId === msg._id,
+                );
+                return (
+                  <MessageBubble
+                    key={msg._id ?? idx}
+                    msg={msg}
+                    isMine={msg.sender === user?.id}
+                    allImages={imageMessages}
+                    imageIndex={imageIndex}
+                  />
+                );
+              });
+            })()}
             <div ref={bottomRef} />
           </div>
 
@@ -512,42 +532,53 @@ function ChatPage() {
 // ── Image Lightbox ───────────────────────────────────────
 
 function ImageLightbox({
-  src,
-  name,
-  messageId,
+  images,
+  initialIndex,
   onClose,
 }: {
-  src: string;
-  name: string;
-  messageId?: string;
+  images: Array<{ src: string; name: string; messageId?: string }>;
+  initialIndex: number;
   onClose: () => void;
 }) {
+  const [index, setIndex] = useState(initialIndex);
   const [downloading, setDownloading] = useState(false);
+
+  const current = images[index];
+  const hasPrev = index > 0;
+  const hasNext = index < images.length - 1;
+
+  const goPrev = useCallback(() => {
+    if (hasPrev) setIndex((i) => i - 1);
+  }, [hasPrev]);
+
+  const goNext = useCallback(() => {
+    if (hasNext) setIndex((i) => i + 1);
+  }, [hasNext]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
+      else if (e.key === 'ArrowLeft') goPrev();
+      else if (e.key === 'ArrowRight') goNext();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onClose]);
+  }, [onClose, goPrev, goNext]);
 
   const handleDownload = async () => {
     if (downloading) return;
     setDownloading(true);
     try {
-      if (messageId) {
-        // Proxy through backend — avoids S3 CORS entirely
-        await chatApi.downloadImage(messageId, name || 'image');
+      if (current.messageId) {
+        await chatApi.downloadImage(current.messageId, current.name || 'image');
       } else {
-        // Fallback: direct fetch (works if S3 CORS allows it)
-        const res = await fetch(src, { mode: 'cors' });
+        const res = await fetch(current.src, { mode: 'cors' });
         if (!res.ok) throw new Error('fetch failed');
         const blob = await res.blob();
         const objectUrl = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = objectUrl;
-        a.download = name || 'image';
+        a.download = current.name || 'image';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -572,7 +603,14 @@ function ImageLightbox({
         className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/60 to-transparent"
         onClick={(e) => e.stopPropagation()}
       >
-        <p className="text-white/80 text-sm truncate max-w-[60vw]">{name}</p>
+        <p className="text-white/80 text-sm truncate max-w-[60vw]">
+          {current.name}
+          {images.length > 1 && (
+            <span className="ml-2 text-white/40 text-xs">
+              {index + 1} / {images.length}
+            </span>
+          )}
+        </p>
         <div className="flex items-center gap-2">
           <button
             onClick={handleDownload}
@@ -595,6 +633,26 @@ function ImageLightbox({
         </div>
       </div>
 
+      {/* Prev arrow */}
+      {hasPrev && (
+        <button
+          onClick={(e) => { e.stopPropagation(); goPrev(); }}
+          className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 text-white transition-all hover:scale-110"
+        >
+          <ChevronLeft size={22} />
+        </button>
+      )}
+
+      {/* Next arrow */}
+      {hasNext && (
+        <button
+          onClick={(e) => { e.stopPropagation(); goNext(); }}
+          className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 text-white transition-all hover:scale-110"
+        >
+          <ChevronRight size={22} />
+        </button>
+      )}
+
       {/* Image */}
       <div
         className="relative max-w-[90vw] max-h-[85vh]"
@@ -602,9 +660,10 @@ function ImageLightbox({
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={src}
-          alt={name}
-          className="max-w-[90vw] max-h-[85vh] object-contain rounded-xl shadow-2xl"
+          key={current.src}
+          src={current.src}
+          alt={current.name}
+          className="max-w-[90vw] max-h-[85vh] object-contain rounded-xl shadow-2xl transition-opacity duration-150"
         />
       </div>
     </div>,
@@ -617,9 +676,13 @@ function ImageLightbox({
 function MessageBubble({
   msg,
   isMine,
+  allImages,
+  imageIndex,
 }: {
   msg: ChatMessage;
   isMine: boolean;
+  allImages: Array<{ src: string; name: string; messageId?: string }>;
+  imageIndex: number;
 }) {
   const [lightbox, setLightbox] = useState(false);
 
@@ -692,9 +755,8 @@ function MessageBubble({
 
       {lightbox && msg.imageUrl && (
         <ImageLightbox
-          src={msg.imageUrl}
-          name={msg.imageOriginalName ?? 'image'}
-          messageId={msg._id}
+          images={allImages}
+          initialIndex={imageIndex}
           onClose={() => setLightbox(false)}
         />
       )}
