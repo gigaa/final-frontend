@@ -544,16 +544,14 @@ function ImageLightbox({
   const [downloading, setDownloading] = useState(false);
 
   const current = images[index];
-  const hasPrev = index > 0;
-  const hasNext = index < images.length - 1;
 
   const goPrev = useCallback(() => {
-    if (hasPrev) setIndex((i) => i - 1);
-  }, [hasPrev]);
+    setIndex((i) => (i - 1 + images.length) % images.length);
+  }, [images.length]);
 
   const goNext = useCallback(() => {
-    if (hasNext) setIndex((i) => i + 1);
-  }, [hasNext]);
+    setIndex((i) => (i + 1) % images.length);
+  }, [images.length]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -634,22 +632,22 @@ function ImageLightbox({
       </div>
 
       {/* Prev arrow */}
-      {hasPrev && (
+      {images.length > 1 && (
         <button
           onClick={(e) => { e.stopPropagation(); goPrev(); }}
-          className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 text-white transition-all hover:scale-110"
+          className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center w-14 h-14 rounded-full bg-white/10 hover:bg-white/25 border border-white/20 hover:border-white/40 text-white backdrop-blur-sm transition-all duration-200 hover:scale-105 shadow-xl"
         >
-          <ChevronLeft size={22} />
+          <ChevronLeft size={30} strokeWidth={2.5} />
         </button>
       )}
 
       {/* Next arrow */}
-      {hasNext && (
+      {images.length > 1 && (
         <button
           onClick={(e) => { e.stopPropagation(); goNext(); }}
-          className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 text-white transition-all hover:scale-110"
+          className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center w-14 h-14 rounded-full bg-white/10 hover:bg-white/25 border border-white/20 hover:border-white/40 text-white backdrop-blur-sm transition-all duration-200 hover:scale-105 shadow-xl"
         >
-          <ChevronRight size={22} />
+          <ChevronRight size={30} strokeWidth={2.5} />
         </button>
       )}
 
