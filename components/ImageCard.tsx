@@ -162,13 +162,13 @@ export default function ImageCard({
                     <Download size={14} />
                   )}
                 </button>
-                <button
+                {/* <button
                   onClick={(e) => { e.stopPropagation(); setShareOpen(true); }}
                   className="flex items-center justify-center w-9 h-9 rounded-xl bg-gray-800/90 hover:bg-gray-700 text-gray-300 transition-colors"
                   title="Share"
                 >
                   <Share2 size={14} />
-                </button>
+                </button> */}
                 <button
                   onClick={handleDelete}
                   disabled={deleting}
