@@ -5,6 +5,9 @@ let socket: Socket | null = null;
 /**
  * Returns (or creates) the singleton socket.io client connected to /chat namespace.
  * The JWT token is read lazily from localStorage at connection time.
+ *
+ * NEXT_PUBLIC_API_URL must be set so the browser can reach the backend directly
+ * (Next.js rewrites don't proxy WebSocket upgrades).
  */
 export function getSocket(): Socket {
   if (!socket) {
