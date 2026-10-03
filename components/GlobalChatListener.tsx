@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'react-toastify';
 import { MessageCircle, ImageIcon } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { connectSocket, getSocket } from '@/lib/socket';
+import { connectApinator, userChannelName } from '@/lib/socket';
 import { useNotificationSound } from '@/lib/useNotificationSound';
 import { friendsApi } from '@/lib/api';
 import type { FriendListItem, ChatMessage } from '@/types';
@@ -15,61 +15,54 @@ export default function GlobalChatListener() {
   const router = useRouter();
   const playSound = useNotificationSound();
   const friendsRef = useRef<FriendListItem[]>([]);
-  // Store user.id in a ref so the stable listener closure always has current value
   const userIdRef = useRef<string>('');
 
-  // ── Keep userIdRef in sync ────────────────────────────
-  useEffect(() => {
-    userIdRef.current = user?.id ?? '';
-  }, [user?.id]);
+  useEffect(() => { userIdRef.current = user?.id ?? ''; }, [user?.id]);
 
-  // ── Connect socket when user logs in ─────────────────
-  useEffect(() => {
-    if (!user) return;
-
-    const token = typeof window !== 'undefined'
-      ? (localStorage.getItem('access_token') ?? '')
-      : '';
-
-    connectSocket(token);
-  }, [user]);
-
-  // ── Refresh friends list ──────────────────────────────
+  // Refresh friends list whenever user changes
   useEffect(() => {
     if (!user) return;
     friendsApi.list().then((f) => { friendsRef.current = f; }).catch(() => {});
   }, [user]);
 
-  // ── Attach listeners ONCE (no user dep — stable handlers via refs) ────────
+  // Subscribe to private-user-{userId} channel for incoming messages
   useEffect(() => {
-    const socket = getSocket();
+    if (!user?.id) return;
 
-    const handleMessage = (msg: ChatMessage) => {
+    const apinator = connectApinator();
+    const channelName = userChannelName(user.id);
+    const channel = apinator.subscribe(channelName);
+
+    const handleMessage = (raw: unknown) => {
+      const data = raw as ChatMessage;
       const myId = userIdRef.current;
-      if (!myId || msg.sender === myId) return;
+      // Ignore echo of own messages
+      if (data.sender === myId) return;
 
-      const sender = friendsRef.current.find((f) => f.friend._id === msg.sender);
+      const sender = friendsRef.current.find((f) => f.friend._id === data.sender);
       const senderName = sender?.friend.name ?? sender?.friend.email ?? 'Someone';
 
+      // Always play sound
       playSound();
 
+      // Don't show toast if already on this conversation
       const onThisConversation =
         typeof window !== 'undefined' &&
         window.location.pathname.startsWith('/chat') &&
-        new URLSearchParams(window.location.search).get('with') === msg.sender;
+        new URLSearchParams(window.location.search).get('with') === data.sender;
 
       if (onThisConversation) return;
 
-      const isImage = msg.type === 'image';
-      const preview = isImage ? '📷 Sent you an image' : msg.content;
+      const isImage = data.type === 'image';
+      const preview = isImage ? '📷 Sent you an image' : data.content;
       const short = preview.length > 60 ? preview.slice(0, 57) + '…' : preview;
 
       toast(
         <div
           className="flex items-start gap-3"
           onClick={() => {
-            router.push(`/chat?with=${msg.sender}`);
-            toast.dismiss(`chat-${msg.sender}`);
+            router.push(`/chat?with=${data.sender}`);
+            toast.dismiss(`chat-${data.sender}`);
           }}
           style={{ cursor: 'pointer' }}
         >
@@ -86,8 +79,8 @@ export default function GlobalChatListener() {
           <MessageCircle size={15} className="flex-shrink-0 text-violet-400 mt-0.5" />
         </div>,
         {
-          toastId: `chat-${msg.sender}`,
-          updateId: `chat-${msg.sender}`,
+          toastId: `chat-${data.sender}`,
+          updateId: `chat-${data.sender}`,
           position: 'bottom-right',
           autoClose: 5000,
           closeOnClick: false,
@@ -102,14 +95,14 @@ export default function GlobalChatListener() {
       );
     };
 
-    socket.on('message:receive', handleMessage);
+    // message:receive carries both text and image messages
+    channel.bind('message:receive', handleMessage);
 
-    // No cleanup disconnect — socket lives for the full session
     return () => {
-      socket.off('message:receive', handleMessage);
+      channel.unbind('message:receive', handleMessage);
+      apinator.unsubscribe(channelName);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // ← empty deps: register once, use refs for current values
+  }, [user?.id, playSound, router]);
 
   return null;
 }

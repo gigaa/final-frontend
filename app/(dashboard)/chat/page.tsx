@@ -26,7 +26,7 @@ import {
 import clsx from 'clsx';
 import { useAuth } from '@/context/AuthContext';
 import { friendsApi, chatApi } from '@/lib/api';
-import { getSocket } from '@/lib/socket';
+import { connectApinator, dmChannelName } from '@/lib/socket';
 import type { FriendListItem, ChatMessage } from '@/types';
 
 export default function ChatPageWrapper() {
@@ -46,7 +46,6 @@ function ChatPage() {
   const [activeFriendId, setActiveFriendId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
-  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
 
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -57,16 +56,13 @@ function ChatPage() {
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  // Always-current ref — socket listeners read this instead of stale closure
   const activeFriendIdRef = useRef<string | null>(null);
   const userIdRef = useRef<string>('');
+  // Track currently subscribed channel so we can unsubscribe on conversation switch
+  const activeChannelRef = useRef<string | null>(null);
 
   useEffect(() => { activeFriendIdRef.current = activeFriendId; }, [activeFriendId]);
-  useEffect(() => {
-    // Init immediately and also keep in sync
-    if (user?.id) userIdRef.current = user.id;
-  }, [user?.id]);
+  useEffect(() => { if (user?.id) userIdRef.current = user.id; }, [user?.id]);
 
   const activeFriend = friends.find((f) => f.friend._id === activeFriendId);
 
@@ -83,110 +79,75 @@ function ChatPage() {
     if (withId) setActiveFriendId(withId);
   }, [searchParams]);
 
-  // ── Attach socket listeners (no connect/disconnect here) ─
+  // ── Subscribe to DM channel when active conversation changes ─
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id || !activeFriendId) return;
 
-    // Init userIdRef immediately (effect timing guarantee)
-    userIdRef.current = user.id;
+    const apinator = connectApinator();
+    const channelName = dmChannelName(user.id, activeFriendId);
 
-    const socket = getSocket();
-
-    const requestOnlineList = () => socket.emit('users:online');
-
-    // If already connected request immediately, otherwise wait for connect event
-    if (socket.connected) {
-      requestOnlineList();
-    } else {
-      socket.once('connect', requestOnlineList);
+    // Unsubscribe from previous channel if different
+    if (activeChannelRef.current && activeChannelRef.current !== channelName) {
+      apinator.unsubscribe(activeChannelRef.current);
     }
+    activeChannelRef.current = channelName;
 
-    const onMessage = (msg: ChatMessage) => {
+    const channel = apinator.subscribe(channelName);
+
+    const onMessageReceive = (raw: unknown) => {
+      const data = raw as ChatMessage;
       const myId = userIdRef.current;
       const friendId = activeFriendIdRef.current;
 
+      // Only show messages for this conversation
       const belongsHere =
         friendId !== null &&
-        ((msg.sender === friendId && msg.recipient === myId) ||
-          (msg.sender === myId && msg.recipient === friendId));
+        ((data.sender === friendId && data.recipient === myId) ||
+          (data.sender === myId && data.recipient === friendId));
 
-      if (belongsHere) {
-        setMessages((prev) => {
-          // If we have an exact _id match — deduplicate
-          if (prev.some((m) => m._id === msg._id)) return prev;
+      if (!belongsHere) return;
 
-          // If this is our own echo (sender === me) — replace the optimistic temp message
-          if (msg.sender === myId) {
-            const tempIdx = prev.findIndex(
-              (m) => m._id.startsWith('temp-') && m.content === msg.content && m.recipient === msg.recipient,
-            );
-            if (tempIdx !== -1) {
-              const next = [...prev];
-              next[tempIdx] = msg;
-              return next;
-            }
+      setMessages((prev) => {
+        // Replace optimistic temp message if content matches
+        if (data.sender === myId) {
+          const tempIdx = prev.findIndex(
+            (m) => m._id.startsWith('temp-') && m.content === data.content && m.recipient === data.recipient,
+          );
+          if (tempIdx !== -1) {
+            const next = [...prev];
+            next[tempIdx] = data;
+            return next;
           }
-
-          return [...prev, msg];
-        });
-        // Mark incoming as read immediately
-        if (msg.sender === friendId) {
-          chatApi.markRead(friendId).catch(() => {});
-          socket.emit('message:read', { friendId });
         }
-      } else if (msg.sender !== myId) {
-        setUnreadCounts((prev) => ({
-          ...prev,
-          [msg.sender]: (prev[msg.sender] ?? 0) + 1,
-        }));
+        // Deduplicate by _id
+        if (prev.some((m) => m._id === data._id)) return prev;
+        return [...prev, data];
+      });
+
+      // Mark incoming as read
+      if (data.sender === friendId) {
+        chatApi.markRead(friendId).catch(() => {});
       }
     };
 
-    const onRead = ({ by }: { by: string }) => {
-      setMessages((prev) =>
-        prev.map((m) => (m.recipient === by ? { ...m, read: true } : m)),
-      );
+    const onMessageRead = (raw: unknown) => {
+      const data = raw as { type: string; by: string };
+      if (data.type === 'message:read') {
+        setMessages((prev) =>
+          prev.map((m) => (m.recipient === data.by ? { ...m, read: true } : m)),
+        );
+      }
     };
 
-    const onOnline = ({ userId }: { userId: string }) => {
-      setOnlineUsers((prev) => new Set(prev).add(userId));
-    };
-
-    const onOffline = ({ userId }: { userId: string }) => {
-      setOnlineUsers((prev) => {
-        const s = new Set(prev);
-        s.delete(userId);
-        return s;
-      });
-    };
-
-    const onOnlineList = ({ users }: { users: string[] }) => {
-      setOnlineUsers(new Set(users));
-    };
-
-    const onError = ({ message }: { message: string }) => {
-      toast.error(message);
-    };
-
-    // Use named references so off() only removes THIS component's listeners
-    socket.on('message:receive', onMessage);
-    socket.on('message:read', onRead);
-    socket.on('user:online', onOnline);
-    socket.on('user:offline', onOffline);
-    socket.on('users:online', onOnlineList);
-    socket.on('error', onError);
+    channel.bind('message:receive', onMessageReceive);
+    // read receipts come through the same DM channel
+    channel.bind('message:receive', onMessageRead);
 
     return () => {
-      socket.off('message:receive', onMessage);
-      socket.off('message:read', onRead);
-      socket.off('user:online', onOnline);
-      socket.off('user:offline', onOffline);
-      socket.off('users:online', onOnlineList);
-      socket.off('error', onError);
-      socket.off('connect', requestOnlineList);
-      // DO NOT disconnect — GlobalChatListener owns the connection
+      channel.unbind('message:receive', onMessageReceive);
+      channel.unbind('message:receive', onMessageRead);
     };
-  }, [user]);
+  }, [user?.id, activeFriendId]);
 
   // ── Load conversation history ─────────────────────────
   const loadHistory = useCallback(async (friendId: string, pageNum = 1, append = false) => {
@@ -209,54 +170,43 @@ function ChatPage() {
     loadHistory(activeFriendId, 1);
     chatApi.markRead(activeFriendId).catch(() => {});
     setUnreadCounts((prev) => ({ ...prev, [activeFriendId]: 0 }));
-    const s = getSocket();
-    if (s.connected) s.emit('message:read', { friendId: activeFriendId });
   }, [activeFriendId, loadHistory]);
 
-  // ── Scroll to bottom ──────────────────────────────────
+  // ── Scroll to bottom on new messages ─────────────────
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // ── Send text ─────────────────────────────────────────
+  // ── Send text — REST (backend triggers Apinator) ──────
   const sendText = async () => {
     if (!text.trim() || !activeFriendId || sending) return;
     const content = text.trim();
     setText('');
     setSending(true);
 
-    const socket = getSocket();
+    // Optimistic update
+    const tempId = `temp-${Date.now()}`;
+    const optimistic: ChatMessage = {
+      _id: tempId,
+      sender: userIdRef.current,
+      recipient: activeFriendId,
+      type: 'text',
+      content,
+      read: false,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, optimistic]);
 
-    if (socket.connected) {
-      // Optimistic update — add message locally immediately, deduplicate on echo
-      const tempId = `temp-${Date.now()}`;
-      const optimistic: ChatMessage = {
-        _id: tempId,
-        sender: userIdRef.current,
-        recipient: activeFriendId,
-        type: 'text',
-        content,
-        read: false,
-        createdAt: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, optimistic]);
-
-      // Emit — gateway will echo back with real _id, deduplicate by replacing temp
-      socket.emit('message:send', { recipientId: activeFriendId, content });
+    try {
+      // REST call → backend saves + triggers Apinator → both sides receive via WS
+      await chatApi.saveTextMessageRest(activeFriendId, content);
+    } catch {
+      toast.error('Failed to send message');
+      setText(content);
+      // Remove the optimistic message on error
+      setMessages((prev) => prev.filter((m) => m._id !== tempId));
+    } finally {
       setSending(false);
-    } else {
-      // Socket not yet connected — use REST and add locally
-      try {
-        const msg = await chatApi.saveTextMessageRest(activeFriendId, content);
-        setMessages((prev) =>
-          prev.some((m) => m._id === (msg as any)._id) ? prev : [...prev, msg as any],
-        );
-      } catch {
-        toast.error('Failed to send message');
-        setText(content);
-      } finally {
-        setSending(false);
-      }
     }
   };
 
@@ -265,13 +215,8 @@ function ChatPage() {
     if (!imagePreview || !activeFriendId || sending) return;
     setSending(true);
     try {
-      const msg = await chatApi.uploadImage(activeFriendId, imagePreview.file);
-      getSocket().emit('message:image', {
-        recipientId: activeFriendId,
-        messageId: String((msg as any)._id),
-        imageUrl: msg.imageUrl,
-        imageOriginalName: msg.imageOriginalName ?? imagePreview.file.name,
-      });
+      await chatApi.uploadImage(activeFriendId, imagePreview.file);
+      // Backend triggers Apinator on both channels — no manual emit needed
       setImagePreview(null);
     } catch {
       toast.error('Failed to send image');
@@ -316,7 +261,6 @@ function ChatPage() {
           ) : (
             friends.map(({ friend }) => {
               const isActive = activeFriendId === friend._id;
-              const isOnline = onlineUsers.has(friend._id);
               const unread = unreadCounts[friend._id] ?? 0;
               return (
                 <button
@@ -327,19 +271,14 @@ function ChatPage() {
                     isActive && 'bg-violet-600/20 border-r-2 border-violet-500',
                   )}
                 >
-                  <div className="relative flex-shrink-0">
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold">
-                      {(friend.name ?? friend.email)[0].toUpperCase()}
-                    </div>
-                    {isOnline && (
-                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-400 rounded-full border-2 border-gray-950" />
-                    )}
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                    {(friend.name ?? friend.email)[0].toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className={clsx('text-sm font-medium truncate', isActive ? 'text-violet-300' : 'text-gray-200')}>
                       {friend.name ?? friend.email}
                     </p>
-                    <p className="text-xs text-gray-500">{isOnline ? 'Online' : 'Offline'}</p>
+                    <p className="text-xs text-gray-500 truncate">{friend.email}</p>
                   </div>
                   {unread > 0 && (
                     <span className="flex-shrink-0 min-w-[1.25rem] h-5 rounded-full bg-violet-600 text-white text-xs flex items-center justify-center px-1">
@@ -366,17 +305,12 @@ function ChatPage() {
             <button onClick={() => setActiveFriendId(null)} className="sm:hidden text-gray-400 hover:text-white">
               <ChevronLeft size={20} />
             </button>
-            <div className="relative">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold">
-                {(activeFriend?.friend.name ?? activeFriend?.friend.email ?? '?')[0].toUpperCase()}
-              </div>
-              {onlineUsers.has(activeFriendId) && (
-                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-400 rounded-full border-2 border-gray-950" />
-              )}
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold">
+              {(activeFriend?.friend.name ?? activeFriend?.friend.email ?? '?')[0].toUpperCase()}
             </div>
             <div>
               <p className="text-white font-medium text-sm">{activeFriend?.friend.name ?? activeFriend?.friend.email}</p>
-              <p className="text-xs text-gray-500">{onlineUsers.has(activeFriendId) ? 'Online' : 'Offline'}</p>
+              <p className="text-xs text-gray-500">{activeFriend?.friend.email}</p>
             </div>
           </div>
 
@@ -442,12 +376,11 @@ function ChatPage() {
           {!imagePreview && (
             <div className="px-4 py-3 border-t border-gray-800 bg-gray-950/80">
               <div className="flex items-end gap-2">
-                <button onClick={() => fileInputRef.current?.click()} className="flex-shrink-0 p-2 rounded-lg text-gray-400 hover:text-violet-400 hover:bg-violet-500/10 transition-colors mb-0.5" title="Send image">
+                <button onClick={() => fileInputRef.current?.click()} className="flex-shrink-0 p-2 rounded-lg text-gray-400 hover:text-violet-400 hover:bg-violet-500/10 transition-colors mb-0.5">
                   <ImageIcon size={20} />
                 </button>
                 <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
                 <textarea
-                  ref={textareaRef}
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   onKeyDown={handleKeyDown}
@@ -562,11 +495,16 @@ function MessageBubble({
 }) {
   const [lightbox, setLightbox] = useState(false);
   const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const isTemp = msg._id.startsWith('temp-');
 
   return (
     <>
       <div className={clsx('flex items-end gap-1.5 max-w-[75%]', isMine ? 'ml-auto flex-row-reverse' : 'mr-auto')}>
-        <div className={clsx('rounded-2xl px-3.5 py-2 text-sm shadow-sm', isMine ? 'bg-violet-600 text-white rounded-br-sm' : 'bg-gray-800 text-gray-100 rounded-bl-sm')}>
+        <div className={clsx(
+          'rounded-2xl px-3.5 py-2 text-sm shadow-sm transition-opacity',
+          isMine ? 'bg-violet-600 text-white rounded-br-sm' : 'bg-gray-800 text-gray-100 rounded-bl-sm',
+          isTemp && 'opacity-60',
+        )}>
           {msg.type === 'image' && msg.imageUrl ? (
             <div className="space-y-1">
               <button onClick={() => setLightbox(true)} className="block focus:outline-none">
@@ -583,7 +521,7 @@ function MessageBubble({
             <span className="text-[10px] opacity-60">{time}</span>
             {isMine && (
               <span className="opacity-60">
-                {msg.read ? <CheckCheck size={12} /> : <Check size={12} />}
+                {isTemp ? <Loader2 size={10} className="animate-spin" /> : msg.read ? <CheckCheck size={12} /> : <Check size={12} />}
               </span>
             )}
           </div>

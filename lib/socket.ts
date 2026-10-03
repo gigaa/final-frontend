@@ -1,35 +1,62 @@
-import { io, Socket } from "socket.io-client";
+import { Apinator } from "@apinator/client";
 
-let socket: Socket | null = null;
+let client: Apinator | null = null;
 
 /**
- * Returns the singleton Socket.io client for the /chat namespace.
- * Created once, lives for the full browser session.
+ * Returns (or creates) the singleton Apinator client.
+ * authHeaders is re-read on every channel auth request via a getter trick —
+ * Apinator SDK accepts a plain object so we use Object.defineProperty to make
+ * the Authorization value lazy (reads localStorage at auth time, not at init).
  */
-export function getSocket(): Socket {
-  if (!socket) {
-    const backendUrl =
-      process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:3000";
+export function getApinator(): Apinator {
+  if (!client) {
+    // Build a headers object whose Authorization value is evaluated lazily
+    const lazyHeaders: Record<string, string> = {};
+    Object.defineProperty(lazyHeaders, "Authorization", {
+      get() {
+        const token =
+          typeof window !== "undefined"
+            ? (localStorage.getItem("access_token") ?? "")
+            : "";
+        return `Bearer ${token}`;
+      },
+      enumerable: true,
+    });
 
-    socket = io(`${backendUrl}/chat`, {
-      autoConnect: false,
-      transports: ["websocket"],
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 2000,
+    client = new Apinator({
+      appKey: process.env.NEXT_PUBLIC_APINATOR_KEY!,
+      cluster:
+        (process.env.NEXT_PUBLIC_APINATOR_CLUSTER as "eu" | "us") ?? "eu",
+      authEndpoint: "/api/auth/channel",
+      authHeaders: lazyHeaders,
     });
   }
-  return socket;
+  return client;
 }
 
-/** Connect with a JWT token. Safe to call multiple times. */
-export function connectSocket(token: string): Socket {
-  const s = getSocket();
-  // Always update auth before connecting so a fresh token is used
-  s.auth = { token };
-  if (!s.connected) s.connect();
-  return s;
+/** Connect the singleton client. Safe to call multiple times. */
+export function connectApinator(): Apinator {
+  const c = getApinator();
+  c.connect();
+  return c;
 }
 
-/** No-op — socket lives for the full session. */
-export function disconnectSocket(): void {}
+/** DM channel — must match server-side dmChannel() in realtime.service.ts */
+export function dmChannelName(userIdA: string, userIdB: string): string {
+  const [a, b] = [userIdA, userIdB].sort();
+  return `private-dm-${a}--${b}`;
+}
+
+/** Per-user notification channel */
+export function userChannelName(userId: string): string {
+  return `private-user-${userId}`;
+}
+
+// ── Legacy no-ops ─────────────────────────────────────────────────────────────
+export function getSocket() {
+  return null as any;
+}
+export function connectSocket(_token: string) {
+  return connectApinator() as any;
+}
+export function disconnectSocket() {}
