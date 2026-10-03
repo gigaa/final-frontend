@@ -360,7 +360,7 @@ function ChatPage() {
             <button onClick={() => setActiveFriendId(null)} className="sm:hidden text-gray-400 hover:text-white">
               <ChevronLeft size={20} />
             </button>
-            <div className={`w-9 h-9 rounded-full ${avatarGradient(activeFriend?.friend.email ?? '')} flex items-center justify-center text-white text-sm font-bold`}>
+            <div  style={avatarGradient(activeFriend?.friend.email ?? '')} className={`w-9 h-9 rounded-full  flex items-center justify-center text-white text-sm font-bold`}>
               {(activeFriend?.friend.name ?? activeFriend?.friend.email ?? '?')[0].toUpperCase()}
             </div>
             <div className="flex-1">

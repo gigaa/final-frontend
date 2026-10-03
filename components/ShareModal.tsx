@@ -191,11 +191,12 @@ export default function ShareModal({ image, onClose }: Props) {
                     {/* Avatar */}
                     <div className="relative">
                       <div
+                      style={avatarGradient(friend.email)}
                         className={clsx(
                           'w-14 h-14 rounded-full flex items-center justify-center text-white text-lg font-bold transition-all duration-200',
                           isSent
                             ? 'bg-green-600/80 ring-2 ring-green-500'
-                            : `${avatarGradient(friend.email)} group-hover:ring-2 ring-violet-400 group-hover:scale-105`,
+                            : `group-hover:ring-2 ring-violet-400 group-hover:scale-105`,
                           isSending && 'opacity-60',
                         )}
                       >

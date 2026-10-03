@@ -64,7 +64,7 @@ export default function GlobalChatListener() {
           }}
           style={{ cursor: 'pointer' }}
         >
-          <div className={`flex-shrink-0 w-9 h-9 rounded-full ${avatarGradient(sender?.friend.email ?? senderName)} flex items-center justify-center text-white text-sm font-bold`}>
+          <div style={avatarGradient(sender?.friend.email ?? senderName)} className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold`}>
             {senderName[0].toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">

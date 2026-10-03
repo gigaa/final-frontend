@@ -408,7 +408,7 @@ export default function FriendsPage() {
 
 function Avatar({ name, email }: { name: string; email?: string }) {
   return (
-    <div className={`w-9 h-9 rounded-full ${avatarGradient(email ?? name)} flex items-center justify-center text-white text-sm font-bold flex-shrink-0`}>
+    <div style={avatarGradient(email ?? name)} className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0`}>
       {name[0].toUpperCase()}
     </div>
   );
