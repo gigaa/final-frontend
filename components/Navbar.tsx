@@ -103,7 +103,7 @@ export default function Navbar() {
         {user && (
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2.5">
-              <div className={`w-8 h-8 rounded-full ${avatarGradient(user.email)} flex items-center justify-center text-white text-sm font-bold`}>
+              <div style={avatarGradient(user.email)} className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold`}>
                 {(user.name ?? user.email)[0].toUpperCase()}
               </div>
               <span className="text-sm text-gray-300 hidden sm:block">
