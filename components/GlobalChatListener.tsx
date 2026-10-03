@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'react-toastify';
 import { MessageCircle, ImageIcon } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { connectSocket, disconnectSocket } from '@/lib/socket';
+import { connectSocket } from '@/lib/socket';
 import { useNotificationSound } from '@/lib/useNotificationSound';
 import { friendsApi } from '@/lib/api';
 import type { FriendListItem, ChatMessage } from '@/types';
@@ -31,6 +31,13 @@ export default function GlobalChatListener() {
         : '';
 
     const socket = connectSocket(token);
+
+    // If socket was disconnected (e.g. chat page cleanup reduced refCount to 0),
+    // re-connect it — GlobalChatListener must always stay connected.
+    if (!socket.connected) {
+      socket.auth = { token };
+      socket.connect();
+    }
 
     const handleMessage = (msg: ChatMessage) => {
       // Only handle messages sent to me by someone else
@@ -98,9 +105,11 @@ export default function GlobalChatListener() {
 
     socket.on('message:receive', handleMessage);
 
+    // GlobalChatListener is mounted for the full session lifetime —
+    // it must NOT call disconnectSocket() or it will kill the shared socket.
     return () => {
       socket.off('message:receive', handleMessage);
-      disconnectSocket();
+      // intentionally no disconnectSocket() here
     };
   }, [user, playSound, router]);
 

@@ -1,15 +1,14 @@
 import { io, Socket } from "socket.io-client";
 
 let socket: Socket | null = null;
-let refCount = 0;
 
 /**
  * Returns the singleton Socket.io client for the /chat namespace.
- * Uses NEXT_PUBLIC_BACKEND_URL so the value is available in the browser.
+ * The socket is created once and lives for the entire browser session.
+ * NEXT_PUBLIC_BACKEND_URL must be set so the value is available client-side.
  */
 export function getSocket(): Socket {
   if (!socket) {
-    // NEXT_PUBLIC_ prefix makes it available client-side
     const backendUrl =
       process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:3000";
 
@@ -17,39 +16,30 @@ export function getSocket(): Socket {
       autoConnect: false,
       transports: ["websocket"],
       reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1500,
     });
   }
   return socket;
 }
 
 /**
- * Connect (or re-use) the socket with the given JWT token.
- * Increments a ref-count so multiple components can share the connection
- * without one tearing it down while another still needs it.
+ * Connect (or re-use) the singleton socket with the given JWT token.
+ * Safe to call from multiple components — the socket is shared.
  */
 export function connectSocket(token: string): Socket {
   const s = getSocket();
-  refCount++;
-
-  // Update auth token before (re-)connecting
   s.auth = { token };
-
-  if (!s.connected) {
-    s.connect();
-  }
-
+  if (!s.connected) s.connect();
   return s;
 }
 
 /**
- * Decrement the ref-count. Only actually disconnects when the last
- * consumer calls this (i.e. both GlobalChatListener and ChatPage unmount).
+ * Called by page-level components when they unmount.
+ * We intentionally do NOT disconnect here — GlobalChatListener
+ * keeps the socket alive for the full session.
+ * The socket is only truly closed when the browser tab closes.
  */
 export function disconnectSocket(): void {
-  refCount = Math.max(0, refCount - 1);
-  if (refCount === 0 && socket?.connected) {
-    socket.disconnect();
-  }
+  // no-op: socket lives for the full browser session
 }
