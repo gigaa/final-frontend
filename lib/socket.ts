@@ -8,8 +8,7 @@ let socket: Socket | null = null;
  */
 export function getSocket(): Socket {
   if (!socket) {
-    const serverUrl =
-      process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+    const serverUrl = process.env.NEXT_API_URL || "http://localhost:3000";
 
     socket = io(`${serverUrl}/chat`, {
       autoConnect: false,
