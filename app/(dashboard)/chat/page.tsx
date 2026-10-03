@@ -63,7 +63,10 @@ function ChatPage() {
   const userIdRef = useRef<string>('');
 
   useEffect(() => { activeFriendIdRef.current = activeFriendId; }, [activeFriendId]);
-  useEffect(() => { if (user?.id) userIdRef.current = user.id; }, [user]);
+  useEffect(() => {
+    // Init immediately and also keep in sync
+    if (user?.id) userIdRef.current = user.id;
+  }, [user?.id]);
 
   const activeFriend = friends.find((f) => f.friend._id === activeFriendId);
 
@@ -84,10 +87,19 @@ function ChatPage() {
   useEffect(() => {
     if (!user) return;
 
+    // Init userIdRef immediately (effect timing guarantee)
+    userIdRef.current = user.id;
+
     const socket = getSocket();
 
-    // Request online list — socket is already connected via GlobalChatListener
-    if (socket.connected) socket.emit('users:online');
+    const requestOnlineList = () => socket.emit('users:online');
+
+    // If already connected request immediately, otherwise wait for connect event
+    if (socket.connected) {
+      requestOnlineList();
+    } else {
+      socket.once('connect', requestOnlineList);
+    }
 
     const onMessage = (msg: ChatMessage) => {
       const myId = userIdRef.current;
@@ -100,7 +112,21 @@ function ChatPage() {
 
       if (belongsHere) {
         setMessages((prev) => {
+          // If we have an exact _id match — deduplicate
           if (prev.some((m) => m._id === msg._id)) return prev;
+
+          // If this is our own echo (sender === me) — replace the optimistic temp message
+          if (msg.sender === myId) {
+            const tempIdx = prev.findIndex(
+              (m) => m._id.startsWith('temp-') && m.content === msg.content && m.recipient === msg.recipient,
+            );
+            if (tempIdx !== -1) {
+              const next = [...prev];
+              next[tempIdx] = msg;
+              return next;
+            }
+          }
+
           return [...prev, msg];
         });
         // Mark incoming as read immediately
@@ -109,7 +135,6 @@ function ChatPage() {
           socket.emit('message:read', { friendId });
         }
       } else if (msg.sender !== myId) {
-        // Other conversation — update badge
         setUnreadCounts((prev) => ({
           ...prev,
           [msg.sender]: (prev[msg.sender] ?? 0) + 1,
@@ -158,6 +183,7 @@ function ChatPage() {
       socket.off('user:offline', onOffline);
       socket.off('users:online', onOnlineList);
       socket.off('error', onError);
+      socket.off('connect', requestOnlineList);
       // DO NOT disconnect — GlobalChatListener owns the connection
     };
   }, [user]);
@@ -198,22 +224,39 @@ function ChatPage() {
     const content = text.trim();
     setText('');
     setSending(true);
-    try {
-      const socket = getSocket();
-      if (socket.connected) {
-        socket.emit('message:send', { recipientId: activeFriendId, content });
-      } else {
-        // REST fallback when socket is unavailable
+
+    const socket = getSocket();
+
+    if (socket.connected) {
+      // Optimistic update — add message locally immediately, deduplicate on echo
+      const tempId = `temp-${Date.now()}`;
+      const optimistic: ChatMessage = {
+        _id: tempId,
+        sender: userIdRef.current,
+        recipient: activeFriendId,
+        type: 'text',
+        content,
+        read: false,
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, optimistic]);
+
+      // Emit — gateway will echo back with real _id, deduplicate by replacing temp
+      socket.emit('message:send', { recipientId: activeFriendId, content });
+      setSending(false);
+    } else {
+      // Socket not yet connected — use REST and add locally
+      try {
         const msg = await chatApi.saveTextMessageRest(activeFriendId, content);
         setMessages((prev) =>
           prev.some((m) => m._id === (msg as any)._id) ? prev : [...prev, msg as any],
         );
+      } catch {
+        toast.error('Failed to send message');
+        setText(content);
+      } finally {
+        setSending(false);
       }
-    } catch {
-      toast.error('Failed to send message');
-      setText(content);
-    } finally {
-      setSending(false);
     }
   };
 
