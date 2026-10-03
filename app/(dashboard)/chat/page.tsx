@@ -22,6 +22,8 @@ import {
   Check,
   CheckCheck,
   Download,
+  Trash2,
+  Pencil,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '@/context/AuthContext';
@@ -53,6 +55,7 @@ function ChatPage() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [imagePreview, setImagePreview] = useState<{ file: File; url: string } | null>(null);
+  const [deletingConversation, setDeletingConversation] = useState(false);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -137,9 +140,32 @@ function ChatPage() {
     socket.on('message:receive', onMessageReceive);
     socket.on('message:read', onMessageRead);
 
+    const onMessageDeleted = (data: { messageId: string }) => {
+      setMessages((prev) => prev.filter((m) => m._id !== data.messageId));
+    };
+
+    const onMessageEdited = (data: { messageId: string; content: string }) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === data.messageId ? { ...m, content: data.content, edited: true } : m,
+        ),
+      );
+    };
+
+    const onConversationDeleted = () => {
+      setMessages([]);
+    };
+
+    socket.on('message:deleted', onMessageDeleted);
+    socket.on('message:edited', onMessageEdited);
+    socket.on('conversation:deleted', onConversationDeleted);
+
     return () => {
       socket.off('message:receive', onMessageReceive);
       socket.off('message:read', onMessageRead);
+      socket.off('message:deleted', onMessageDeleted);
+      socket.off('message:edited', onMessageEdited);
+      socket.off('conversation:deleted', onConversationDeleted);
     };
   }, [user?.id]);
 
@@ -223,6 +249,40 @@ function ChatPage() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(); }
   };
 
+  const handleDeleteMessage = useCallback(async (messageId: string) => {
+    try {
+      await chatApi.deleteMessage(messageId);
+      setMessages((prev) => prev.filter((m) => m._id !== messageId));
+    } catch {
+      toast.error('Failed to delete message');
+    }
+  }, []);
+
+  const handleEditMessage = useCallback(async (messageId: string, content: string) => {
+    try {
+      await chatApi.editMessage(messageId, content);
+      setMessages((prev) =>
+        prev.map((m) => m._id === messageId ? { ...m, content, edited: true } : m),
+      );
+    } catch {
+      toast.error('Failed to edit message');
+    }
+  }, []);
+
+  const handleDeleteConversation = async () => {
+    if (!activeFriendId || deletingConversation) return;
+    setDeletingConversation(true);
+    try {
+      await chatApi.deleteConversation(activeFriendId);
+      setMessages([]);
+      toast.success('Conversation deleted');
+    } catch {
+      toast.error('Failed to delete conversation');
+    } finally {
+      setDeletingConversation(false);
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -302,10 +362,19 @@ function ChatPage() {
             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold">
               {(activeFriend?.friend.name ?? activeFriend?.friend.email ?? '?')[0].toUpperCase()}
             </div>
-            <div>
+            <div className="flex-1">
               <p className="text-white font-medium text-sm">{activeFriend?.friend.name ?? activeFriend?.friend.email}</p>
               <p className="text-xs text-gray-500">{activeFriend?.friend.email}</p>
             </div>
+            <button
+              onClick={handleDeleteConversation}
+              disabled={deletingConversation}
+              title="Delete entire conversation"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-40 transition-colors text-xs"
+            >
+              {deletingConversation ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              <span className="hidden sm:inline">Clear chat</span>
+            </button>
           </div>
 
           {/* Messages */}
@@ -338,6 +407,8 @@ function ChatPage() {
                   isMine={msg.sender === user?.id}
                   allImages={imageMessages}
                   imageIndex={imageMessages.findIndex((im) => im.messageId === msg._id)}
+                  onDelete={handleDeleteMessage}
+                  onEdit={handleEditMessage}
                 />
               ));
             })()}
@@ -519,24 +590,103 @@ function ImageLightbox({
 // ── Message Bubble ────────────────────────────────────────
 
 function MessageBubble({
-  msg, isMine, allImages, imageIndex,
+  msg, isMine, allImages, imageIndex, onDelete, onEdit,
 }: {
   msg: ChatMessage;
   isMine: boolean;
   allImages: Array<{ src: string; name: string; messageId?: string }>;
   imageIndex: number;
+  onDelete: (id: string) => void;
+  onEdit: (id: string, content: string) => void;
 }) {
   const [lightbox, setLightbox] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState(msg.content);
+  const [deleting, setDeleting] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const editRef = useRef<HTMLTextAreaElement>(null);
+
   const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const isTemp = msg._id.startsWith('temp-');
 
+  // Close menu on outside click
+  useEffect(() => {
+    if (!showMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showMenu]);
+
+  // Focus textarea when edit mode opens
+  useEffect(() => {
+    if (editing) {
+      setEditValue(msg.content);
+      setTimeout(() => {
+        editRef.current?.focus();
+        editRef.current?.setSelectionRange(editRef.current.value.length, editRef.current.value.length);
+      }, 0);
+    }
+  }, [editing, msg.content]);
+
+  const submitEdit = () => {
+    const trimmed = editValue.trim();
+    if (!trimmed || trimmed === msg.content) { setEditing(false); return; }
+    onEdit(msg._id, trimmed);
+    setEditing(false);
+  };
+
+  const handleDelete = async () => {
+    setShowMenu(false);
+    setDeleting(true);
+    await onDelete(msg._id);
+    setDeleting(false);
+  };
+
   return (
     <>
-      <div className={clsx('flex items-end gap-1.5 max-w-[75%]', isMine ? 'ml-auto flex-row-reverse' : 'mr-auto')}>
+      <div className={clsx('flex items-end gap-1.5 max-w-[75%] group', isMine ? 'ml-auto flex-row-reverse' : 'mr-auto')}>
+        {/* Action menu trigger — only for own non-temp messages */}
+        {isMine && !isTemp && (
+          <div className="relative self-center" ref={menuRef}>
+            <button
+              onClick={() => setShowMenu((v) => !v)}
+              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-gray-500 hover:text-gray-300 hover:bg-gray-700/60"
+              title="Message options"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                <circle cx="8" cy="3" r="1.5" /><circle cx="8" cy="8" r="1.5" /><circle cx="8" cy="13" r="1.5" />
+              </svg>
+            </button>
+            {showMenu && (
+              <div className="absolute bottom-full right-0 mb-1 z-20 bg-gray-900 border border-gray-700 rounded-xl shadow-xl overflow-hidden min-w-[130px]">
+                {msg.type === 'text' && (
+                  <button
+                    onClick={() => { setShowMenu(false); setEditing(true); }}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-200 hover:bg-gray-800 transition-colors"
+                  >
+                    <Pencil size={13} /> Edit
+                  </button>
+                )}
+                <button
+                  onClick={handleDelete}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-400 hover:bg-gray-800 transition-colors"
+                >
+                  <Trash2 size={13} /> Delete
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className={clsx(
           'rounded-2xl px-3.5 py-2 text-sm shadow-sm transition-opacity',
           isMine ? 'bg-violet-600 text-white rounded-br-sm' : 'bg-gray-800 text-gray-100 rounded-bl-sm',
-          isTemp && 'opacity-60',
+          (isTemp || deleting) && 'opacity-60',
         )}>
           {msg.type === 'image' && msg.imageUrl ? (
             <div className="space-y-1">
@@ -547,11 +697,30 @@ function MessageBubble({
               </button>
               {msg.imageOriginalName && <p className="text-xs opacity-70 truncate max-w-[12rem]">{msg.imageOriginalName}</p>}
             </div>
+          ) : editing ? (
+            <div className="flex flex-col gap-1.5 min-w-[160px]">
+              <textarea
+                ref={editRef}
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitEdit(); }
+                  if (e.key === 'Escape') setEditing(false);
+                }}
+                rows={2}
+                className="resize-none rounded-lg bg-violet-700/60 text-white text-sm px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-white/40 placeholder-white/40"
+              />
+              <div className="flex gap-1.5 justify-end">
+                <button onClick={() => setEditing(false)} className="px-2 py-0.5 text-xs rounded bg-white/10 hover:bg-white/20 transition-colors">Cancel</button>
+                <button onClick={submitEdit} className="px-2 py-0.5 text-xs rounded bg-white/20 hover:bg-white/30 font-medium transition-colors">Save</button>
+              </div>
+            </div>
           ) : (
             <p className="whitespace-pre-wrap break-words"><MessageText content={msg.content} isMine={isMine} /></p>
           )}
           <div className={clsx('flex items-center gap-1 mt-1', isMine ? 'justify-end' : 'justify-start')}>
             <span className="text-[10px] opacity-60">{time}</span>
+            {msg.edited && !editing && <span className="text-[10px] opacity-50 italic">edited</span>}
             {isMine && (
               <span className="opacity-60">
                 {isTemp ? <Loader2 size={10} className="animate-spin" /> : msg.read ? <CheckCheck size={12} /> : <Check size={12} />}

@@ -108,6 +108,7 @@ export interface ChatMessage {
   imageOriginalName?: string;
   imageKey?: string;
   read: boolean;
+  edited?: boolean;
   createdAt: string;
 }
 

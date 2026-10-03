@@ -206,4 +206,17 @@ export const chatApi = {
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   },
+
+  deleteMessage: (messageId: string) =>
+    api.delete(`/chat/messages/${messageId}`),
+
+  editMessage: (messageId: string, content: string) =>
+    api
+      .patch<
+        import("@/types").ChatMessage
+      >(`/chat/messages/${messageId}`, { content })
+      .then((r) => r.data),
+
+  deleteConversation: (friendId: string) =>
+    api.delete(`/chat/${friendId}/conversation`),
 };
