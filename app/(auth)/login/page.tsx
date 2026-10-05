@@ -67,24 +67,27 @@ export default function LoginPage() {
           required
           autoComplete="current-password"
         />
-
-        {error && (
-          <div className="flex items-center gap-2.5 rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-400">
-            <AlertCircle size={16} className="shrink-0" />
-            {error}
-          </div>
-        )}
         <Button
           type="submit"
           loading={loading}
           size="lg"
-          className="w-full mt-2"
+          className="w-full"
         >
           Sign In
         </Button>
       </form>
 
-      <p className="text-center text-sm text-gray-300 mt-6">
+      {/* Error — fixed height slot so layout never shifts */}
+      <div className="h-10 flex items-center justify-center mt-3">
+        {error && (
+          <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600/25 border border-red-400/70 text-sm text-red-200 font-medium shadow-lg shadow-red-900/30">
+            <AlertCircle size={15} className="shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+      </div>
+
+      <p className="text-center text-sm text-gray-300 mt-3">
         Don't have an account?{' '}
         <Link
           href="/register"

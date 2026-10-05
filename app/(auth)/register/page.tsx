@@ -5,8 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
-import { Wand2 } from 'lucide-react';
-import { toast } from 'react-hot-toast';
+import { Wand2, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 
 export default function RegisterPage() {
@@ -15,13 +14,15 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password.length < 6) {
-      toast.error('Password must be at least 6 characters');
+      setError('Password must be at least 6 characters');
       return;
     }
+    setError(null);
     setLoading(true);
     try {
       await register(email, password, name);
@@ -30,7 +31,7 @@ export default function RegisterPage() {
       const message = axios.isAxiosError(err)
         ? err.response?.data?.message ?? 'Registration failed'
         : 'Registration failed';
-      toast.error(message);
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -72,7 +73,7 @@ export default function RegisterPage() {
           type="password"
           placeholder="At least 6 characters"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(e) => { setPassword(e.target.value); setError(null); }}
           required
           autoComplete="new-password"
         />
@@ -80,13 +81,23 @@ export default function RegisterPage() {
           type="submit"
           loading={loading}
           size="lg"
-          className="w-full mt-2"
+          className="w-full"
         >
           Create Account
         </Button>
       </form>
 
-      <p className="text-center text-sm text-gray-300 mt-6">
+      {/* Error — fixed height slot so layout never shifts */}
+      <div className="h-10 flex items-center justify-center mt-3">
+        {error && (
+          <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600/25 border border-red-400/70 text-sm text-red-200 font-medium shadow-lg shadow-red-900/30">
+            <AlertCircle size={15} className="shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+      </div>
+
+      <p className="text-center text-sm text-gray-300 mt-3">
         Already have an account?{' '}
         <Link
           href="/login"
