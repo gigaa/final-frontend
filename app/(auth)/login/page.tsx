@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
-import { Wand2 } from 'lucide-react';
+import { Wand2, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import axios from 'axios';
 
@@ -14,9 +14,11 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     setLoading(true);
     try {
       await login(email, password);
@@ -25,7 +27,7 @@ export default function LoginPage() {
       const message = axios.isAxiosError(err)
         ? err.response?.data?.message ?? 'Login failed'
         : 'Login failed';
-      toast.error(message);
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -61,10 +63,17 @@ export default function LoginPage() {
           type="password"
           placeholder="••••••••"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(e) => { setPassword(e.target.value); setError(null); }}
           required
           autoComplete="current-password"
         />
+
+        {error && (
+          <div className="flex items-center gap-2.5 rounded-xl bg-red-500/10 border border-red-500/30 px-4 py-3 text-sm text-red-400">
+            <AlertCircle size={16} className="shrink-0" />
+            {error}
+          </div>
+        )}
         <Button
           type="submit"
           loading={loading}
