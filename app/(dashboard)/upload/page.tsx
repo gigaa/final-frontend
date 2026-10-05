@@ -59,12 +59,9 @@ export default function UploadPage() {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: ACCEPTED,
-    maxSize: 10 * 1024 * 1024,
-    maxFiles: 5,
     onDropRejected: (rejected) => {
       const err = rejected[0]?.errors[0];
-      if (err?.code === 'file-too-large') toast.error('File too large (max 10MB)');
-      else if (err?.code === 'file-invalid-type') toast.error('Unsupported file type');
+      if (err?.code === 'file-invalid-type') toast.error('Unsupported file type');
       else toast.error('File rejected');
     },
   });
@@ -136,7 +133,7 @@ export default function UploadPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-white">Upload Images</h1>
         <p className="text-gray-400 text-sm mt-1">
-          JPEG, PNG, WebP, GIF, AVIF · Max 10MB · Up to 5 files
+          JPEG, PNG, WebP, GIF, AVIF
         </p>
       </div>
 
