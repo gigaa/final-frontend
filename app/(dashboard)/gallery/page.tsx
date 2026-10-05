@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { imagesApi } from '@/lib/api';
 import { ImageRecord } from '@/types';
@@ -8,7 +8,7 @@ import ImageCard from '@/components/ImageCard';
 import Button from '@/components/ui/Button';
 import ConfirmModal from '@/components/ConfirmModal';
 import {
-  Upload, Images, ChevronLeft, ChevronRight,
+  Upload, Images,
   CheckSquare, Square, Trash2, Download, X, Share2,
 } from 'lucide-react';
 import ShareModal from '@/components/ShareModal';
@@ -16,41 +16,61 @@ import { toast } from 'react-hot-toast';
 import clsx from 'clsx';
 
 export default function GalleryPage() {
-  const [images,  setImages]  = useState<ImageRecord[]>([]);
-  const [page,    setPage]    = useState(1);
-  const [pages,   setPages]   = useState(1);
-  const [total,   setTotal]   = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [images,      setImages]      = useState<ImageRecord[]>([]);
+  const [page,        setPage]        = useState(1);
+  const [pages,       setPages]       = useState(1);
+  const [total,       setTotal]       = useState(0);
+  const [loading,     setLoading]     = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  // sentinel ref for IntersectionObserver
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // ── selection state ──
-  const [selectMode,   setSelectMode]   = useState(false);
-  const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set());
-  const [bulkDeleting, setBulkDeleting] = useState(false);
-  const [bulkDling,    setBulkDling]    = useState(false);
-  const [bulkConfirm,  setBulkConfirm]  = useState(false);
+  const [selectMode,    setSelectMode]    = useState(false);
+  const [selectedIds,   setSelectedIds]   = useState<Set<string>>(new Set());
+  const [bulkDeleting,  setBulkDeleting]  = useState(false);
+  const [bulkDling,     setBulkDling]     = useState(false);
+  const [bulkConfirm,   setBulkConfirm]   = useState(false);
   const [bulkShareOpen, setBulkShareOpen] = useState(false);
 
+  // first load
   const fetchImages = useCallback(async (p: number) => {
-    setLoading(true);
+    if (p === 1) setLoading(true);
+    else setLoadingMore(true);
     try {
       const res = await imagesApi.list(p, 12);
-      setImages(res.data);
+      setImages((prev) => p === 1 ? res.data : [...prev, ...res.data]);
       setPages(res.pages);
       setTotal(res.total);
     } catch {
       toast.error('Failed to load images');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }, []);
 
   useEffect(() => { fetchImages(page); }, [page, fetchImages]);
 
-  // Exit select mode when page changes
+  // IntersectionObserver — trigger next page when sentinel comes into view
   useEffect(() => {
-    setSelectMode(false);
-    setSelectedIds(new Set());
-  }, [page]);
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry.isIntersecting && !loadingMore && !loading && page < pages) {
+          setPage((p) => p + 1);
+        }
+      },
+      { rootMargin: '200px' },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loading, loadingMore, page, pages]);
 
   const handleDeleted = (id: string) => {
     setImages((prev) => prev.filter((img) => img._id !== id));
@@ -338,29 +358,24 @@ export default function GalleryPage() {
             ))}
           </div>
 
-          {/* Pagination */}
-          {pages > 1 && (
-            <div className="flex items-center justify-center gap-3 mt-10">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setPage((p) => p - 1)}
-                disabled={page === 1}
-              >
-                <ChevronLeft size={16} />
-                Prev
-              </Button>
-              <span className="text-sm text-gray-400">Page {page} of {pages}</span>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setPage((p) => p + 1)}
-                disabled={page === pages}
-              >
-                Next
-                <ChevronRight size={16} />
-              </Button>
+          {/* Infinite scroll sentinel */}
+          <div ref={sentinelRef} className="h-1" />
+
+          {/* Loading more spinner */}
+          {loadingMore && (
+            <div className="flex justify-center mt-6">
+              <svg className="animate-spin h-6 w-6 text-violet-400" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              </svg>
             </div>
+          )}
+
+          {/* End of list indicator */}
+          {!loadingMore && page >= pages && images.length > 0 && (
+            <p className="text-center text-xs text-gray-600 mt-6">
+              All {total} image{total !== 1 ? 's' : ''} loaded
+            </p>
           )}
         </>
       )}
