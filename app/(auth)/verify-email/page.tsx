@@ -16,9 +16,12 @@ function VerifyEmailContent() {
   const [status, setStatus] = useState<Status>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const hasRun = useRef(false);
+  // Stable ref so the effect doesn't re-run when verifyEmail identity changes
+  const verifyEmailRef = useRef(verifyEmail);
+  verifyEmailRef.current = verifyEmail;
 
   useEffect(() => {
-    // Prevent double-fire in React Strict Mode
+    // Prevent double-fire in React Strict Mode / remounts
     if (hasRun.current) return;
     hasRun.current = true;
 
@@ -30,7 +33,7 @@ function VerifyEmailContent() {
       return;
     }
 
-    verifyEmail(token).catch((err: unknown) => {
+    verifyEmailRef.current(token).catch((err: unknown) => {
       const message = axios.isAxiosError(err)
         ? err.response?.data?.message ?? 'Verification failed. Please try again.'
         : 'Verification failed. Please try again.';
@@ -38,7 +41,9 @@ function VerifyEmailContent() {
       setStatus('error');
     });
     // verifyEmail redirects on success — if we're still here, something failed
-  }, [searchParams, verifyEmail]);
+  // Only re-run if the token in the URL itself changes (e.g. user navigates to a new link)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   return (
     <div className="bg-gray-900/80 backdrop-blur border border-gray-800 rounded-2xl p-10 shadow-2xl">
@@ -72,12 +77,22 @@ function VerifyEmailContent() {
             Verification failed
           </h1>
           <p className="text-gray-400 text-sm mt-2">{errorMessage}</p>
-          <Link
-            href="/register"
-            className="inline-block mt-6 px-6 py-2.5 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            Back to Register
-          </Link>
+          <div className="flex flex-col gap-2 mt-6">
+            {errorMessage.toLowerCase().includes('already') ? (
+              <Link
+                href="/login"
+                className="inline-block px-6 py-2.5 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                Go to Login
+              </Link>
+            ) : null}
+            <Link
+              href="/register"
+              className="inline-block px-6 py-2.5 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              Back to Register
+            </Link>
+          </div>
         </>
       )}
     </div>

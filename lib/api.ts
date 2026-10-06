@@ -13,6 +13,8 @@ import {
 const api = axios.create({
   baseURL: "/api",
   headers: { "Content-Type": "application/json" },
+  // Render free tier can take 30-60 s to cold-start; give it enough runway.
+  timeout: 60_000,
 });
 
 api.interceptors.request.use((config) => {

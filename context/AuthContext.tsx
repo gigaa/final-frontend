@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useState,
+  useCallback,
   ReactNode,
 } from 'react';
 import { useRouter } from 'next/navigation';
@@ -52,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     connectSocket();
   };
 
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     try {
       const res = await authApi.login({ email, password });
       persist(res.user, res.access_token);
@@ -73,27 +74,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       throw err; // re-throw so login page can show its own error toast
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]);
 
-  const register = async (email: string, password: string, name?: string) => {
+  const register = useCallback(async (email: string, password: string, name?: string) => {
     await authApi.register({ email, password, name });
     router.push('/check-email');
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]);
 
-  const verifyEmail = async (token: string) => {
+  const verifyEmail = useCallback(async (token: string) => {
     const res = await authApi.verifyEmail(token);
     persist(res.user, res.access_token);
     router.push('/gallery');
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem('user');
     localStorage.removeItem('access_token');
     setUser(null);
     // Disconnect socket on logout
     disconnectSocket();
     router.push('/login');
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]);
 
   return (
     <AuthContext.Provider
